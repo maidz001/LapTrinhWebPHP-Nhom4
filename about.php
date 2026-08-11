@@ -1,6 +1,6 @@
 <?php
 $ten_nhom = "Nhóm 4";
-$thanh_vien = ["Nguyễn Hồng Mai", "Nguyễn Kỳ", "Triệu Văn Phấn","Đặng Quang Trung"];
+$thanh_vien = ["Nguyễn Hồng Mai", "Nguyễn Kỳ", "Triệu Văn Phấn","Đặng Quang Trung","Nguyễn Mạnh Hiếu"];
 $de_tai = "Website Hệ thống quản lý phòng thực hành và thiết bị";
 ?>
 <!DOCTYPE html>
