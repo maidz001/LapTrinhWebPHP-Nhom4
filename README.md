@@ -58,5 +58,5 @@ http://localhost/LapTrinhWebPHP-Nhom4/about.php
 | Nguyễn Hồng Mai | |
 | Nguyễn Kỳ | |
 | Triệu Văn Phấn | |
-| Đặng Quang Trung | |
+| Đặng Quang Trung | Quản lý Phòng và Thiết bị |
 | Nguyễn Mạnh Hiếu | |
