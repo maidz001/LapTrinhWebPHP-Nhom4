@@ -1,9 +1,9 @@
 # Hệ thống quản lý phòng thực hành và thiết bị
 
-<<<<<<< HEAD
+
 ## Mô tả
 Website quản lý phòng thực hành và thiết bị, được xây dựng bằng PHP và MySQL, thực hiện trong khuôn khổ học phần Lập trình Web.
-=======
+
 ## Tên đề tài
 **Website Hệ thống quản lý phòng thực hành và thiết bị** — hỗ trợ đặt phòng, mượn thiết bị, báo hỏng và theo dõi bảo trì trong khoa/phòng thí nghiệm.
 
@@ -12,13 +12,13 @@ Website được xây dựng bằng PHP thuần và MySQL (sử dụng PDO), th�
 
 ## Danh sách thành viên và phân công
 
-| Họ tên | Vai trò phụ trách |
-|---|---|
-| Nguyễn Hồng Mai | Phân quyền, Dashboard & Kiểm thử |
-| Nguyễn Kỳ | Duyệt yêu cầu & Quản lý booking |
-| Triệu Văn Phấn | Đặt phòng |
-| Đặng Quang Trung | Quản lý Phòng và Thiết bị  |
-| Nguyễn Mạnh Hiếu | Báo hỏng & Bảo trì |
+|      Họ tên      |         Vai trò phụ trách        |
+|------------------|----------------------------------|
+| Nguyễn Hồng Mai  | Phân quyền, Dashboard & Kiểm thử |
+| Nguyễn Kỳ        | Duyệt yêu cầu & Quản lý booking  |
+| Triệu Văn Phấn   | Đặt phòng                        |
+| Đặng Quang Trung | Quản lý Phòng và Thiết bị        |
+| Nguyễn Mạnh Hiếu | Báo hỏng & Bảo trì               |
 
 ## Các đối tượng dữ liệu chính
 
@@ -56,7 +56,7 @@ Website được xây dựng bằng PHP thuần và MySQL (sử dụng PDO), th�
 - [ ] Đặt phòng, duyệt yêu cầu — đang thực hiện.
 - [ ] Báo hỏng, lịch sử bảo trì — đang thực hiện.
 - [ ] Đăng nhập/đăng ký, phân quyền đầy đủ, dashboard — đang thực hiện.
->>>>>>> 0dde276d52b631b829794d909db0d36c6a6076fd
+
 
 ## Yêu cầu môi trường
 - PHP >= 8.0
@@ -65,10 +65,10 @@ Website được xây dựng bằng PHP thuần và MySQL (sử dụng PDO), th�
 
 ## Cấu trúc thư mục
 
-<<<<<<< HEAD
-=======
+
+
 ```
->>>>>>> 0dde276d52b631b829794d909db0d36c6a6076fd
+
 LapTrinhWebPHP-Nhom4/
 ├── about.php
 ├── index.php
@@ -125,13 +125,12 @@ LapTrinhWebPHP-Nhom4/
 │   └── check_availability.php
 └── README.md
 ```
->>>>>>> 0dde276d52b631b829794d909db0d36c6a6076fd
 
 ## Hướng dẫn cài đặt và chạy local
 
 1. Clone repository về máy:
 ```bash
-<<<<<<< HEAD
+
    git clone https://github.com/maidz001/LapTrinhWebPHP-Nhom4.git
 ```
 
@@ -147,13 +146,13 @@ git clone https://github.com/maidz001/LapTrinhWebPHP-Nhom4.git
 ```
 C:/xampp/htdocs/LapTrinhWebPHP-Nhom4
 ```
->>>>>>> 0dde276d52b631b829794d909db0d36c6a6076fd
+
 
 3. Khởi động **Apache** và **MySQL** trong XAMPP Control Panel.
 
 4. Tạo database:
    - Mở phpMyAdmin: `http://localhost/phpmyadmin`
-<<<<<<< HEAD
+
    - Tạo database tên `quanly_phongthuchanh` (hoặc tên nhóm thống nhất)
    - Import file `database.sql` (nếu có) vào database vừa tạo
    - Cập nhật thông tin kết nối trong `config/database.php` cho khớp (host, username, password, tên database)
@@ -162,15 +161,6 @@ C:/xampp/htdocs/LapTrinhWebPHP-Nhom4
 
 http://localhost/LapTrinhWebPHP-Nhom4/about.php
 
-
-## Thành viên nhóm
-| Họ tên | Vai trò |
-|---|---|
-| Nguyễn Hồng Mai | |
-| Nguyễn Kỳ | |
-| Triệu Văn Phấn | |
-| Đặng Quang Trung | |
-| Nguyễn Mạnh Hiếu | |
 =======
    - Import trực tiếp file `database/database.sql` (file đã tự tạo database `quanly_phongthuchanh` và dữ liệu mẫu)
    - Kiểm tra lại thông tin kết nối trong `config/database.php` cho khớp (host, username, password, tên database)
@@ -178,5 +168,4 @@ http://localhost/LapTrinhWebPHP-Nhom4/about.php
 5. Truy cập project trên trình duyệt:
 ```
 http://localhost/LapTrinhWebPHP-Nhom4/index.php
-```
->>>>>>> 0dde276d52b631b829794d909db0d36c6a6076fd
+
