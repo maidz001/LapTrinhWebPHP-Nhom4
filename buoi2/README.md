@@ -22,3 +22,5 @@ Phần việc:
 
 \- Xác định trạng thái yêu cầu booking
 
+Chức năng: Duyệt yêu cầu booking.
+
