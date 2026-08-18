@@ -24,7 +24,7 @@ Cập nhật lần cuối: (Hiện chưa test)
 | 1 | Thêm loại thiết bị mới | Lưu thành công | | |
 | 2 | Thêm thiết bị, gắn đúng loại + phòng | Thiết bị hiển thị đúng thông tin liên kết | | |
 | 3 | Lọc danh sách thiết bị theo trạng thái (hỏng/bảo trì/hoạt động) | Danh sách lọc đúng | | |
-| 4 | Lọc thiết bị theo phòng | Danh sách lọc đúng | | |
+| 4 | Lọc thiết bị theo phòng | Danh lọc đúng | | |
 
 ## 3. Kiểm thử phân quyền (`auth/`) — module bạn phụ trách
 
