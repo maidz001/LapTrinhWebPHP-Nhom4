@@ -242,6 +242,21 @@ rồi truy cập `http://localhost:8000/index.php`
 
 Dùng 1 trong 5 tài khoản mẫu ở bảng "Dữ liệu mẫu có sẵn" phía trên, mật khẩu chung là `Matkhau123`. Hoặc vào `/auth/register.php` để tạo tài khoản mới (mặc định vai trò `user`).
 
+### 6. Chạy chức năng CRUD bookings - Nguyễn Kỳ
+
+Phần Bài 5 của Nguyễn Kỳ sử dụng bảng `bookings` làm thực thể chính. Các câu SQL được tách riêng trong `bookings/repository.php`, còn các trang giao diện chỉ gọi hàm và hiển thị dữ liệu.
+
+Các đường dẫn dùng để chạy thử:
+
+- Tạo yêu cầu: `http://localhost:8000/bookings/form.php`
+- Danh sách yêu cầu của người dùng: `http://localhost:8000/bookings/my_requests.php`
+- Duyệt và quản lý yêu cầu: `http://localhost:8000/bookings/pending.php`
+- Lịch sử yêu cầu đã xử lý: `http://localhost:8000/bookings/history.php`
+
+Đăng nhập `trung.gv@nhom4.edu.vn` để thử tạo, xem, sửa và hủy yêu cầu. Đăng nhập `ky.labstaff@nhom4.edu.vn` để thử tìm kiếm, phân trang, xem chi tiết, duyệt hoặc từ chối. Mật khẩu chung là `Matkhau123`.
+
+Năm trường hợp kiểm thử nhập đúng và sai được ghi tại [`test/booking_crud_nguyenky.md`](test/booking_crud_nguyenky.md).
+
 ---
 
 ## Bảo mật đã áp dụng
