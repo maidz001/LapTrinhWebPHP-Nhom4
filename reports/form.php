@@ -218,12 +218,19 @@ tbody tr:hover { background: #f9fafb; }
         <div class="table-wrap">
         <table>
             <thead>
-                <tr>
-                    <th>#</th><th>Mã TB</th><th>Tên thiết bị</th><th>Người báo hỏng</th>
-                    <th>Ưu tiên</th><th>Hạn xử lý</th><th>Cho mượn?</th>
-                    <th>Trạng thái xử lý</th><th>Thời gian</th>
-                </tr>
-            </thead>
+    <tr>
+        <th>#</th>
+        <th>Mã TB</th>
+        <th>Tên thiết bị</th>
+        <th>Người báo hỏng</th>
+        <th>Mô tả lỗi</th> <!-- THÊM CỘT NÀY -->
+        <th>Ưu tiên</th>
+        <th>Hạn xử lý</th>
+        <th>Cho mượn?</th>
+        <th>Trạng thái xử lý</th>
+        <th>Thời gian</th>
+    </tr>
+</thead>
             <tbody>
                 <?php $stt = 1; ?>
                 <?php foreach ($danhSachBaoHong as $phieu): ?>
@@ -237,6 +244,7 @@ tbody tr:hover { background: #f9fafb; }
                         <td><?= htmlspecialchars($phieu['ma_thiet_bi']) ?></td>
                         <td><?= htmlspecialchars($phieu['ten_thiet_bi']) ?></td>
                         <td><?= htmlspecialchars($phieu['nguoi_bao_hong']) ?></td>
+                        <td><?= htmlspecialchars($phieu['mo_ta_loi']) ?></td>
                         <td><span class="tag tag-<?= $phieu['muc_do_uu_tien'] === 'Cao' ? 'cao' : ($phieu['muc_do_uu_tien'] === 'Trung bình' ? 'tb' : 'thap') ?>"><?= htmlspecialchars($phieu['muc_do_uu_tien']) ?></span></td>
                         <td><?= htmlspecialchars($phieu['han_xu_ly']) ?></td>
                         <td><?php if ($khongChoMuon): ?><span class="tag tag-khong-cho-muon">Không</span><?php else: ?><span class="tag tag-cho-muon">Có</span><?php endif; ?></td>
