@@ -1,81 +1,89 @@
 <?php
-require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../includes/auth_check.php';
-require_role(['admin', 'lab_staff']); // chỉ admin / cán bộ lab được thêm phòng
-
-$errors = [];
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = trim($_POST['name'] ?? '');
-    $location = trim($_POST['location'] ?? '');
-    $capacity = (int)($_POST['capacity'] ?? 0);
-    $status = $_POST['status'] ?? 'active';
-    $description = trim($_POST['description'] ?? '');
-
-    if ($name === '') {
-        $errors[] = 'Tên phòng không được để trống.';
-    }
-    if ($capacity < 0) {
-        $errors[] = 'Sức chứa không hợp lệ.';
-    }
-    if (!in_array($status, ['active', 'inactive'], true)) {
-        $errors[] = 'Trạng thái không hợp lệ.';
-    }
-
-    if (empty($errors)) {
-        $stmt = $pdo->prepare(
-            "INSERT INTO rooms (name, location, capacity, status, description)
-             VALUES (:name, :location, :capacity, :status, :description)"
-        );
-        $stmt->execute([
-            'name'        => $name,
-            'location'    => $location,
-            'capacity'    => $capacity,
-            'status'      => $status,
-            'description' => $description,
-        ]);
-
-        header('Location: list.php?msg=' . urlencode('Thêm phòng thành công.'));
-        exit;
-    }
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
+require_once __DIR__ . '/../config/database.php';
 
-$page_title = 'Thêm phòng';
-require_once __DIR__ . '/../includes/header.php';
+$errors = $_SESSION['form_errors'] ?? [];
+$old    = $_SESSION['form_old'] ?? [];
+unset($_SESSION['form_errors'], $_SESSION['form_old']);
 ?>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Thêm phòng thực hành</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
 
-    <h1>Thêm phòng mới</h1>
+<div class="modal-box" style="margin:40px auto;">
+    <div class="modal-header">
+        <h2>Thêm phòng thực hành</h2>
+        <a href="index.php" class="modal-close">&times;</a>
+    </div>
 
-<?php foreach ($errors as $error): ?>
-    <p class="alert alert-danger"><?php echo htmlspecialchars($error); ?></p>
-<?php endforeach; ?>
+    <form method="POST" action="xuly.php" novalidate>
+        <input type="hidden" name="mode" value="them">
 
-    <form method="post" class="form">
-        <div class="form-group">
-            <label>Tên phòng *</label>
-            <input type="text" name="name" value="<?php echo htmlspecialchars($_POST['name'] ?? ''); ?>" required>
+        <div class="form-group <?= isset($errors['ma_phong']) ? 'has-error' : '' ?>">
+            <label for="ma_phong">Mã phòng</label>
+            <input type="text" id="ma_phong" name="ma_phong" placeholder="LAB103" value="<?= htmlspecialchars($old['ma_phong'] ?? '') ?>">
+            <div class="error-text"><?= $errors['ma_phong'] ?? '' ?></div>
         </div>
-        <div class="form-group">
-            <label>Vị trí</label>
-            <input type="text" name="location" value="<?php echo htmlspecialchars($_POST['location'] ?? ''); ?>">
+
+        <div class="form-group <?= isset($errors['ten_phong']) ? 'has-error' : '' ?>">
+            <label for="ten_phong">Tên phòng</label>
+            <input type="text" id="ten_phong" name="ten_phong" placeholder="Lab 103" value="<?= htmlspecialchars($old['ten_phong'] ?? '') ?>">
+            <div class="error-text"><?= $errors['ten_phong'] ?? '' ?></div>
         </div>
-        <div class="form-group">
-            <label>Sức chứa</label>
-            <input type="number" name="capacity" min="0" value="<?php echo htmlspecialchars($_POST['capacity'] ?? 0); ?>">
+
+        <div class="form-group <?= isset($errors['vi_tri']) ? 'has-error' : '' ?>">
+            <label for="vi_tri">Vị trí</label>
+            <input type="text" id="vi_tri" name="vi_tri" placeholder="Nhà A, Tầng 2" value="<?= htmlspecialchars($old['vi_tri'] ?? '') ?>">
+            <div class="error-text"><?= $errors['vi_tri'] ?? '' ?></div>
         </div>
+
+        <div class="form-row">
+            <div class="form-group <?= isset($errors['suc_chua']) ? 'has-error' : '' ?>">
+                <label for="suc_chua">Sức chứa</label>
+                <input type="number" id="suc_chua" name="suc_chua" placeholder="40" min="1" value="<?= htmlspecialchars($old['suc_chua'] ?? '') ?>">
+                <div class="error-text"><?= $errors['suc_chua'] ?? '' ?></div>
+            </div>
+
+            <div class="form-group">
+                <label for="loai_phong">Loại phòng</label>
+                <select id="loai_phong" name="loai_phong">
+                    <?php
+                    $cacLoai = ['Lập trình', 'Mạng máy tính', 'CSDL', 'Điện tử', 'AI/ML'];
+                    $loaiDaChon = $old['loai_phong'] ?? 'Lập trình';
+                    foreach ($cacLoai as $loai):
+                        ?>
+                        <option value="<?= $loai ?>" <?= $loaiDaChon === $loai ? 'selected' : '' ?>><?= $loai ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+
         <div class="form-group">
-            <label>Trạng thái</label>
-            <select name="status">
-                <option value="active">Đang hoạt động</option>
-                <option value="inactive">Ngừng hoạt động</option>
+            <label for="trang_thai">Trạng thái</label>
+            <select id="trang_thai" name="trang_thai">
+                <option value="available" <?= ($old['trang_thai'] ?? 'available') === 'available' ? 'selected' : '' ?>>Hoạt động</option>
+                <option value="maintenance" <?= ($old['trang_thai'] ?? '') === 'maintenance' ? 'selected' : '' ?>>Bảo trì</option>
             </select>
         </div>
-        <div class="form-group">
-            <label>Mô tả</label>
-            <textarea name="description"><?php echo htmlspecialchars($_POST['description'] ?? ''); ?></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary">Lưu</button>
-        <a href="list.php" class="btn">Hủy</a>
-    </form>
 
-<?php require_once __DIR__ . '/../includes/footer.php'; ?>
+        <div class="form-group">
+            <label for="mo_ta">Mô tả</label>
+            <textarea id="mo_ta" name="mo_ta" placeholder="Mô tả phòng thực hành..."><?= htmlspecialchars($old['mo_ta'] ?? '') ?></textarea>
+        </div>
+
+        <div class="modal-footer">
+            <a href="index.php" class="btn btn-cancel">Hủy</a>
+            <button type="submit" class="btn btn-primary">Lưu phòng</button>
+        </div>
+    </form>
+</div>
+
+</body>
+</html>

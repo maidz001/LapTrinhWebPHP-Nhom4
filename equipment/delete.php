@@ -1,21 +1,21 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../includes/auth_check.php';
-require_role(['admin', 'lab_staff']);
+require_once __DIR__ . '/../models/ThietBi.php';
 
+$tbModel = new ThietBi($pdo);
 $id = (int)($_GET['id'] ?? 0);
 
-if ($id > 0) {
-    try {
-        $stmt = $pdo->prepare("DELETE FROM equipment_types WHERE id = :id");
-        $stmt->execute(['id' => $id]);
-        $msg = 'Xóa loại thiết bị thành công.';
-    } catch (PDOException $e) {
-        $msg = 'Không thể xóa: đang có thiết bị thuộc loại này.';
-    }
-} else {
-    $msg = 'Yêu cầu không hợp lệ.';
+$tb = $tbModel->getById($id);
+if (!$tb) {
+    header('Location: index.php?msg=' . urlencode('Không tìm thấy thiết bị'));
+    exit;
 }
 
-header('Location: list.php?msg=' . urlencode($msg));
-exit;
+try {
+    $tbModel->delete($id);
+    header('Location: index.php?msg=' . urlencode('Đã xóa thiết bị "' . $tb['ten_thiet_bi'] . '"'));
+    exit;
+} catch (PDOException $e) {
+    header('Location: index.php?msg=' . urlencode('Không thể xóa: thiết bị đang được tham chiếu ở nơi khác'));
+    exit;
+}

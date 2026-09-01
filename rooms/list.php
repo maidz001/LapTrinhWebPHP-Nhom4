@@ -1,85 +1,52 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../includes/auth_check.php';
-require_login(); // ai đăng nhập cũng xem được danh sách phòng
+require_once __DIR__ . '/../models/Phong.php';
 
-$role = current_user()['role'];
-$canManage = in_array($role, ['admin', 'lab_staff'], true);
+$phongModel = new Phong($pdo);
 
-// Lọc theo trạng thái (tuỳ chọn)
-$status = $_GET['status'] ?? '';
-$sql = "SELECT * FROM rooms";
-$params = [];
-if ($status === 'active' || $status === 'inactive') {
-    $sql .= " WHERE status = :status";
-    $params['status'] = $status;
+$id = (int)($_GET['id'] ?? 0);
+$phong = $phongModel->getById($id);
+
+if (!$phong) {
+    header('Location: index.php?msg=' . urlencode('Không tìm thấy phòng'));
+    exit;
 }
-$sql .= " ORDER BY id ASC";
 
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$rooms = $stmt->fetchAll();
-
-$page_title = 'Danh sách phòng';
-require_once __DIR__ . '/../includes/header.php';
+$nhanTrangThai = [
+        'available'   => 'Hoạt động',
+        'maintenance' => 'Bảo trì',
+        'closed'      => 'Đã đóng',
+];
 ?>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Chi tiết phòng - <?= htmlspecialchars($phong['ten_phong']) ?></title>
+    <link rel="stylesheet" href="../../assets/css/style.css">
+</head>
+<body>
 
-    <h1>Danh sách phòng</h1>
+<div class="modal-box" style="margin:40px auto;">
+    <div class="modal-header">
+        <h2><?= htmlspecialchars($phong['ten_phong']) ?></h2>
+        <a href="index.php" class="modal-close">&times;</a>
+    </div>
 
-<?php if (isset($_GET['msg'])): ?>
-    <p class="alert alert-success"><?php echo htmlspecialchars($_GET['msg']); ?></p>
-<?php endif; ?>
-
-    <form method="get" class="filter-form">
-        <label>Trạng thái:
-            <select name="status" onchange="this.form.submit()">
-                <option value="">-- Tất cả --</option>
-                <option value="active" <?php echo $status === 'active' ? 'selected' : ''; ?>>Đang hoạt động</option>
-                <option value="inactive" <?php echo $status === 'inactive' ? 'selected' : ''; ?>>Ngừng hoạt động</option>
-            </select>
-        </label>
-    </form>
-
-<?php if ($canManage): ?>
-    <p><a href="add.php" class="btn btn-primary">+ Thêm phòng mới</a></p>
-<?php endif; ?>
-
-    <table class="data-table">
-        <thead>
-        <tr>
-            <th>ID</th>
-            <th>Tên phòng</th>
-            <th>Vị trí</th>
-            <th>Sức chứa</th>
-            <th>Trạng thái</th>
-            <?php if ($canManage): ?><th>Thao tác</th><?php endif; ?>
-        </tr>
-        </thead>
-        <tbody>
-        <?php if (empty($rooms)): ?>
-            <tr><td colspan="6">Chưa có phòng nào.</td></tr>
-        <?php endif; ?>
-        <?php foreach ($rooms as $room): ?>
-            <tr>
-                <td><?php echo $room['id']; ?></td>
-                <td><?php echo htmlspecialchars($room['name']); ?></td>
-                <td><?php echo htmlspecialchars($room['location'] ?? ''); ?></td>
-                <td><?php echo (int)$room['capacity']; ?></td>
-                <td>
-                    <?php echo $room['status'] === 'active'
-                        ? '<span class="badge badge-success">Hoạt động</span>'
-                        : '<span class="badge badge-secondary">Ngừng hoạt động</span>'; ?>
-                </td>
-                <?php if ($canManage): ?>
-                    <td>
-                        <a href="edit.php?id=<?php echo $room['id']; ?>">Sửa</a> |
-                        <a href="delete.php?id=<?php echo $room['id']; ?>"
-                           onclick="return confirm('Xóa phòng này? Hành động không thể hoàn tác.');">Xóa</a>
-                    </td>
-                <?php endif; ?>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
+    <table style="width:100%; border-collapse:collapse;">
+        <tr><td style="padding:8px 0; color:#64748b;">Mã phòng</td><td><b><?= htmlspecialchars($phong['ma_phong']) ?></b></td></tr>
+        <tr><td style="padding:8px 0; color:#64748b;">Vị trí</td><td><?= htmlspecialchars($phong['vi_tri']) ?></td></tr>
+        <tr><td style="padding:8px 0; color:#64748b;">Sức chứa</td><td><?= (int)$phong['suc_chua'] ?> chỗ ngồi</td></tr>
+        <tr><td style="padding:8px 0; color:#64748b;">Trạng thái</td><td><?= $nhanTrangThai[$phong['trang_thai']] ?? $phong['trang_thai'] ?></td></tr>
+        <tr><td style="padding:8px 0; color:#64748b;">Mô tả</td><td><?= nl2br(htmlspecialchars($phong['mo_ta'] ?? '(không có)')) ?></td></tr>
+        <tr><td style="padding:8px 0; color:#64748b;">Ngày tạo</td><td><?= htmlspecialchars($phong['created_at']) ?></td></tr>
     </table>
 
-<?php require_once __DIR__ . '/../includes/footer.php'; ?>
+    <div class="modal-footer">
+        <a href="index.php" class="btn btn-cancel">Quay lại</a>
+        <a href="edit.php?id=<?= $phong['id'] ?>" class="btn btn-primary">Sửa phòng</a>
+    </div>
+</div>
+
+</body>
+</html>
