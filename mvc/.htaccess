@@ -1,0 +1,7 @@
+# Rewrite CHỈ áp dụng trong thư mục /mvc — không ảnh hưởng bất kỳ đường
+# dẫn nào khác của dự án (không có .htaccess ở thư mục gốc, các file
+# .php cũ vẫn được truy cập trực tiếp như trước).
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]

@@ -20,8 +20,8 @@ function current_user()
 function require_login()
 {
     if (!isset($_SESSION['user'])) {
-        $current = $_SERVER['REQUEST_URI'] ?? '/index.php';
-        header('Location: /auth/login.php?redirect=' . urlencode($current));
+        $current = $_SERVER['REQUEST_URI'] ?? '/mvc/dashboard';
+        header('Location: /mvc/auth/login?redirect=' . urlencode($current));
         exit;
     }
 }
@@ -41,7 +41,7 @@ function require_role(array $roles)
  * Dùng ở đầu auth/login.php và auth/register.php: nếu người dùng đã
  * đăng nhập rồi thì đưa thẳng về dashboard, không cho xem lại form.
  */
-function redirect_if_logged_in(string $to = '/index.php')
+function redirect_if_logged_in(string $to = '/mvc/dashboard')
 {
     if (isset($_SESSION['user'])) {
         header('Location: ' . $to);

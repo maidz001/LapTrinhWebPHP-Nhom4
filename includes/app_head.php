@@ -20,17 +20,17 @@ $__role = $__user['role'] ?? 'user';
 
 // (key nav) => [label, icon, href, roles cho phép rỗng = mọi role đã đăng nhập, badge]
 $__menu = [
-    'overview'  => ['Tổng quan',        'home',      '/index.php',                 [], null],
-    'rooms'     => ['Phòng thực hành',  'grid',      '/rooms/list.php',             [], null],
-    'equipment' => ['Thiết bị',         'monitor',   '/equipment/list.php',         [], null],
-    'eq_types'  => ['Danh mục thiết bị','list',      '/equipment_types/list.php',   ['admin', 'lab_staff'], null],
-    'history'   => ['Lịch sử dụng',     'clock',     '/bookings/history.php',       [], null],
-    'booking'   => ['Tạo yêu cầu',      'plus',      '/bookings/form.php',          [], null],
-    'my_requests' => ['Yêu cầu của tôi','calendar',  '/bookings/my_requests.php',   [], null],
-    'approval'  => ['Duyệt yêu cầu',    'check',     '/bookings/pending.php',       ['admin', 'lab_staff'], null],
-    'handover'  => ['Bàn giao thiết bị','swap',      '/equipment/handover.php',     ['admin', 'lab_staff'], null],
-    'reports'   => ['Báo cáo',          'bar-chart', '/reports/index.php',          [], null],
-    'users'     => ['Người dùng',       'users',     '/users/list.php',             ['admin'], null],
+    'overview'  => ['Tổng quan',        'home',      '/mvc/dashboard',                 [], null],
+    'rooms'     => ['Phòng thực hành',  'grid',      '/mvc/rooms',             [], null],
+    'equipment' => ['Thiết bị',         'monitor',   '/mvc/equipment',         [], null],
+    'eq_types'  => ['Danh mục thiết bị','list',      '/mvc/equipment-types',   ['admin', 'lab_staff'], null],
+    'history'   => ['Lịch sử dụng',     'clock',     '/mvc/bookings/history',       [], null],
+    'booking'   => ['Tạo yêu cầu',      'plus',      '/mvc/bookings/form',          [], null],
+    'my_requests' => ['Yêu cầu của tôi','calendar',  '/mvc/bookings',   [], null],
+    'approval'  => ['Duyệt yêu cầu',    'check',     '/mvc/bookings/pending',       ['admin', 'lab_staff'], null],
+    'handover'  => ['Bàn giao thiết bị','swap',      '/mvc/equipment/handover',     ['admin', 'lab_staff'], null],
+    'reports'   => ['Báo cáo',          'bar-chart', '/mvc/reports',          [], null],
+    'users'     => ['Người dùng',       'users',     '/mvc/users',             ['admin'], null],
 ];
 
 function __initials(string $name): string
@@ -84,9 +84,9 @@ $active_menu = $active_menu ?? 'overview';
 
     <div class="sidebar-footer">
         <ul class="sidebar-nav" style="padding:0;">
-            <li><a href="/settings/index.php" class="<?php echo $active_menu === 'settings' ? 'active' : ''; ?>"><?php echo app_icon('settings'); ?><span>Cài đặt</span></a></li>
+            <li><a href="/mvc/settings" class="<?php echo $active_menu === 'settings' ? 'active' : ''; ?>"><?php echo app_icon('settings'); ?><span>Cài đặt</span></a></li>
             <li>
-                <a href="/auth/logout.php?csrf_token=<?php echo urlencode(csrf_token()); ?>"
+                <a href="/mvc/auth/logout?csrf_token=<?php echo urlencode(csrf_token()); ?>"
                    class="nav-logout"
                    onclick="return confirm('Bạn có chắc muốn đăng xuất?');">
                     <?php echo app_icon('logout'); ?><span>Đăng xuất</span>
