@@ -27,6 +27,15 @@ if (!$booking || $booking['trang_thai'] !== 'pending') {
     exit;
 }
 
+$user = current_user();
+
+// Không cho tự duyệt yêu cầu do chính mình gửi, kể cả khi có quyền admin/lab_staff
+if ((int) $booking['user_id'] === (int) $user['id']) {
+    flash_set('error', 'Bạn không thể tự duyệt yêu cầu của chính mình.');
+    header('Location: ' . $returnUrl);
+    exit;
+}
+
 $resourceId = $booking['loai_yeu_cau'] === 'room'
     ? (int) $booking['room_id']
     : (int) $booking['equipment_id'];
@@ -43,7 +52,6 @@ $conflict = bookingHasTimeConflict(
 if ($conflict) {
     flash_set('error', 'Không thể duyệt vì đã có lịch được duyệt trùng thời gian.');
 } else {
-    $user = current_user();
     $approved = approveBooking($pdo, $id, (int) $user['id']);
     flash_set($approved ? 'success' : 'error', $approved ? 'Duyệt yêu cầu thành công.' : 'Yêu cầu đã được người khác xử lý.');
 }

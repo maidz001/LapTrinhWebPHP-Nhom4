@@ -28,6 +28,21 @@ if (mb_strlen($reason, 'UTF-8') < 5 || mb_strlen($reason, 'UTF-8') > 255) {
 }
 
 $user = current_user();
+
+$booking = findBookingById($pdo, $id);
+if (!$booking || $booking['trang_thai'] !== 'pending') {
+    flash_set('error', 'Yêu cầu không tồn tại hoặc đã được xử lý.');
+    header('Location: ' . $returnUrl);
+    exit;
+}
+
+// Không cho tự từ chối yêu cầu do chính mình gửi, kể cả khi có quyền admin/lab_staff
+if ((int) $booking['user_id'] === (int) $user['id']) {
+    flash_set('error', 'Bạn không thể tự xử lý yêu cầu của chính mình.');
+    header('Location: ' . $returnUrl);
+    exit;
+}
+
 $rejected = rejectBooking($pdo, $id, (int) $user['id'], $reason);
 flash_set($rejected ? 'success' : 'error', $rejected ? 'Đã từ chối yêu cầu.' : 'Yêu cầu không tồn tại hoặc đã được xử lý.');
 header('Location: ' . $returnUrl);
