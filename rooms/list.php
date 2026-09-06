@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../models/Phong.php';
 
@@ -13,9 +15,9 @@ if (!$phong) {
 }
 
 $nhanTrangThai = [
-        'available'   => 'Hoạt động',
-        'maintenance' => 'Bảo trì',
-        'closed'      => 'Đã đóng',
+    'available'   => 'Hoạt động',
+    'maintenance' => 'Bảo trì',
+    'closed'      => 'Đã đóng',
 ];
 ?>
 <!DOCTYPE html>
@@ -34,12 +36,30 @@ $nhanTrangThai = [
     </div>
 
     <table style="width:100%; border-collapse:collapse;">
-        <tr><td style="padding:8px 0; color:#64748b;">Mã phòng</td><td><b><?= htmlspecialchars($phong['ma_phong']) ?></b></td></tr>
-        <tr><td style="padding:8px 0; color:#64748b;">Vị trí</td><td><?= htmlspecialchars($phong['vi_tri']) ?></td></tr>
-        <tr><td style="padding:8px 0; color:#64748b;">Sức chứa</td><td><?= (int)$phong['suc_chua'] ?> chỗ ngồi</td></tr>
-        <tr><td style="padding:8px 0; color:#64748b;">Trạng thái</td><td><?= $nhanTrangThai[$phong['trang_thai']] ?? $phong['trang_thai'] ?></td></tr>
-        <tr><td style="padding:8px 0; color:#64748b;">Mô tả</td><td><?= nl2br(htmlspecialchars($phong['mo_ta'] ?? '(không có)')) ?></td></tr>
-        <tr><td style="padding:8px 0; color:#64748b;">Ngày tạo</td><td><?= htmlspecialchars($phong['created_at']) ?></td></tr>
+        <tr>
+            <td style="padding:8px 0; color:#64748b;">Mã phòng</td>
+            <td><b><?= htmlspecialchars($phong['ma_phong']) ?></b></td>
+        </tr>
+        <tr>
+            <td style="padding:8px 0; color:#64748b;">Vị trí</td>
+            <td><?= htmlspecialchars($phong['vi_tri']) ?></td>
+        </tr>
+        <tr>
+            <td style="padding:8px 0; color:#64748b;">Sức chứa</td>
+            <td><?= (int)$phong['suc_chua'] ?> chỗ ngồi</td>
+        </tr>
+        <tr>
+            <td style="padding:8px 0; color:#64748b;">Trạng thái</td>
+            <td><?= $nhanTrangThai[$phong['trang_thai']] ?? $phong['trang_thai'] ?></td>
+        </tr>
+        <tr>
+            <td style="padding:8px 0; color:#64748b;">Mô tả</td>
+            <td><?= nl2br(htmlspecialchars($phong['mo_ta'] ?? '(không có)')) ?></td>
+        </tr>
+        <tr>
+            <td style="padding:8px 0; color:#64748b;">Ngày tạo</td>
+            <td><?= htmlspecialchars($phong['created_at']) ?></td>
+        </tr>
     </table>
 
     <div class="modal-footer">

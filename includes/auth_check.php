@@ -20,7 +20,8 @@ function current_user()
 function require_login()
 {
     if (!isset($_SESSION['user'])) {
-        header('Location: /auth/login.php');
+        $current = $_SERVER['REQUEST_URI'] ?? '/index.php';
+        header('Location: /auth/login.php?redirect=' . urlencode($current));
         exit;
     }
 }
@@ -34,4 +35,27 @@ function require_role(array $roles)
         echo 'Bạn không có quyền truy cập chức năng này.';
         exit;
     }
+}
+
+/**
+ * Dùng ở đầu auth/login.php và auth/register.php: nếu người dùng đã
+ * đăng nhập rồi thì đưa thẳng về dashboard, không cho xem lại form.
+ */
+function redirect_if_logged_in(string $to = '/index.php')
+{
+    if (isset($_SESSION['user'])) {
+        header('Location: ' . $to);
+        exit;
+    }
+}
+
+/**
+ * Lấy địa chỉ IP thực của client (dùng để log đăng nhập / chống brute-force).
+ * Chỉ tin REMOTE_ADDR vì header X-Forwarded-For có thể bị giả mạo khi
+ * không chạy sau một reverse proxy đáng tin cậy đã được cấu hình riêng.
+ */
+function client_ip(): string
+{
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    return is_string($ip) && $ip !== '' ? $ip : '0.0.0.0';
 }
