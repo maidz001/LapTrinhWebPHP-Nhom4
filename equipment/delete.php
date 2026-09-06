@@ -1,21 +1,46 @@
 <?php
+/**
+ * equipment/delete.php
+ * ---------------------------------------------------------------------
+ * Xoá thiết bị (GET có kèm csrf_token, theo mẫu auth/logout.php).
+ * Nếu thiết bị đang có lịch sử mượn (bookings.equipment_id RESTRICT),
+ * DB sẽ từ chối xoá — bắt lỗi và báo cho người dùng.
+ * ---------------------------------------------------------------------
+ */
+
+declare(strict_types=1);
+
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth_check.php';
+require_once __DIR__ . '/../includes/flash.php';
+require_once __DIR__ . '/../includes/csrf.php';
+
 require_role(['admin', 'lab_staff']);
 
-$id = (int)($_GET['id'] ?? 0);
-
-if ($id > 0) {
-    try {
-        $stmt = $pdo->prepare("DELETE FROM equipment_types WHERE id = :id");
-        $stmt->execute(['id' => $id]);
-        $msg = 'Xóa loại thiết bị thành công.';
-    } catch (PDOException $e) {
-        $msg = 'Không thể xóa: đang có thiết bị thuộc loại này.';
-    }
-} else {
-    $msg = 'Yêu cầu không hợp lệ.';
+if (!csrf_verify($_GET['csrf_token'] ?? null)) {
+    flash_set('error', 'Phiên làm việc đã hết hạn, vui lòng thử lại.');
+    header('Location: /equipment/list.php');
+    exit;
 }
 
-header('Location: list.php?msg=' . urlencode($msg));
+$id = $_GET['id'] ?? '';
+if (!ctype_digit((string) $id)) {
+    flash_set('error', 'Thiết bị không hợp lệ.');
+    header('Location: /equipment/list.php');
+    exit;
+}
+
+try {
+    $stmt = $pdo->prepare("DELETE FROM equipment WHERE id = :id");
+    $stmt->execute(['id' => (int) $id]);
+    if ($stmt->rowCount() > 0) {
+        flash_set('success', 'Đã xoá thiết bị. Các báo hỏng liên quan cũng đã được xoá theo.');
+    } else {
+        flash_set('error', 'Không tìm thấy thiết bị cần xoá.');
+    }
+} catch (PDOException $e) {
+    flash_set('error', 'Không thể xoá thiết bị này vì đã có lịch sử mượn liên quan.');
+}
+
+header('Location: /equipment/list.php');
 exit;
