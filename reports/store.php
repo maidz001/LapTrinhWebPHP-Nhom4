@@ -2,18 +2,13 @@
 /**
  * store.php
  * =====================================================
- * Đóng 2 vai trò:
- * 1) Nơi định nghĩa class BaoHongRepository (Buổi 6: refactor CRUD sang class Repository)
- * 2) CONTROLLER: xử lý toàn bộ request POST/GET đặc biệt (báo hỏng, đăng nhập, đăng xuất,
- *    cập nhật trạng thái bảo trì, endpoint JSON) - nhưng CHỈ chạy khi file này được truy cập
- *    trực tiếp. Khi form.php require_once file này, phần Controller ở cuối sẽ KHÔNG chạy,
- *    nhờ vậy form.php (View) tái sử dụng được class mà không bị "chạy nhầm" logic xử lý.
+ * Class BaoHongRepository + Controller xử lý Backend
  * =====================================================
  */
 
 session_start();
 
-// ================== 1. REPOSITORY CLASS (Buổi 6) ==================
+// ================== 1. REPOSITORY CLASS ==================
 class BaoHongRepository
 {
     private PDO $pdo;
@@ -23,10 +18,9 @@ class BaoHongRepository
         $this->pdo = $pdo;
     }
 
-    /** Tạo bảng nếu chưa có + seed dữ liệu mẫu (gồm 1 tài khoản cán bộ lab dùng password_hash). */
+    /** Tạo bảng nếu chưa có + seed dữ liệu mẫu */
     public function khoiTaoCoSoDuLieu(): void
     {
-        // Bảng CHƯA tồn tại lần nào -> tạo mới với đầy đủ cột (bao gồm trang_thai_xu_ly)
         $this->pdo->exec("CREATE TABLE IF NOT EXISTS bao_hong (
             id INT AUTO_INCREMENT PRIMARY KEY,
             ma_thiet_bi VARCHAR(20) NOT NULL,
@@ -40,8 +34,6 @@ class BaoHongRepository
             ngay_bao_hong DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-        // Bảng ĐÃ tồn tại từ trước (tạo ở buổi 2-3, chưa có cột mới) -> tự thêm cột còn thiếu.
-        // CREATE TABLE IF NOT EXISTS ở trên sẽ bị bỏ qua trong trường hợp này, nên phải tự dò cột.
         $this->themCotNeuChuaCo('bao_hong', 'trang_thai_xu_ly',
             "ALTER TABLE bao_hong ADD COLUMN trang_thai_xu_ly
              ENUM('Chưa xử lý','Đang xử lý','Đã xử lý') NOT NULL DEFAULT 'Chưa xử lý' AFTER trang_thai");
@@ -61,7 +53,6 @@ class BaoHongRepository
             );
             $stmt->execute([
                 'tdn' => 'canbo1',
-                // Buổi 7: password_hash cho tài khoản mẫu, KHÔNG lưu mật khẩu dạng chữ thường
                 'mkh' => password_hash('123456', PASSWORD_DEFAULT),
                 'ht'  => 'Phạm Văn Kỹ Thuật',
             ]);
@@ -78,11 +69,6 @@ class BaoHongRepository
         }
     }
 
-    /**
-     * Kiểm tra 1 cột đã tồn tại trong bảng chưa; nếu chưa thì chạy câu ALTER TABLE để thêm vào.
-     * Nhờ hàm này, mỗi khi thêm tính năng mới cần thêm cột, bảng CŨ (đã tạo từ buổi trước)
-     * sẽ tự được nâng cấp mà không cần vào phpMyAdmin chạy ALTER TABLE thủ công.
-     */
     private function themCotNeuChuaCo(string $tenBang, string $tenCot, string $cauLenhAlter): void
     {
         $stmt = $this->pdo->prepare("SELECT COUNT(*) AS tong
@@ -95,13 +81,41 @@ class BaoHongRepository
         }
     }
 
-    /** READ (nhiều bản ghi) - dùng cho bảng lịch sử + endpoint JSON. */
+    /** READ (Tất cả bản ghi) */
     public function layDanhSach(): array
     {
         return $this->pdo->query("SELECT * FROM bao_hong ORDER BY ngay_bao_hong DESC, id DESC")->fetchAll();
     }
 
-    /** READ (1 bản ghi). */
+    /** READ (Tìm kiếm & Lọc) */
+    public function timKiemDanhSach(string $tuKhoa = '', string $uuTien = '', string $trangThaiXuLy = ''): array
+    {
+        $sql = "SELECT * FROM bao_hong WHERE 1=1";
+        $params = [];
+
+        if ($tuKhoa !== '') {
+            $sql .= " AND (ma_thiet_bi LIKE :tk OR ten_thiet_bi LIKE :tk OR nguoi_bao_hong LIKE :tk OR mo_ta_loi LIKE :tk)";
+            $params['tk'] = '%' . $tuKhoa . '%';
+        }
+
+        if ($uuTien !== '') {
+            $sql .= " AND muc_do_uu_tien = :uuTien";
+            $params['uuTien'] = $uuTien;
+        }
+
+        if ($trangThaiXuLy !== '') {
+            $sql .= " AND trang_thai_xu_ly = :trangThai";
+            $params['trangThai'] = $trangThaiXuLy;
+        }
+
+        $sql .= " ORDER BY ngay_bao_hong DESC, id DESC";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    /** READ (1 bản ghi) */
     public function timTheoId(int $id): ?array
     {
         $stmt = $this->pdo->prepare("SELECT * FROM bao_hong WHERE id = :id");
@@ -110,7 +124,7 @@ class BaoHongRepository
         return $kq ?: null;
     }
 
-    /** CREATE. */
+    /** CREATE */
     public function themMoi(array $phieu): bool
     {
         $stmt = $this->pdo->prepare("INSERT INTO bao_hong
@@ -128,18 +142,31 @@ class BaoHongRepository
         ]);
     }
 
-    /**
-     * UPDATE - cập nhật trạng thái xử lý bảo trì.
-     * Đây là hành động NGHIỆP VỤ NHẠY CẢM: chỉ cán bộ lab (đã đăng nhập) mới được gọi,
-     * việc kiểm tra quyền được thực hiện ở phần Controller bên dưới, không nằm trong Repository.
-     */
-    public function capNhatTrangThaiXuLy(int $id, string $trangThaiMoi): bool
+    /** UPDATE - cập nhật toàn bộ thông tin phiếu */
+    public function capNhatPhieu(int $id, string $moTaLoi, string $mucDoUuTien, string $trangThaiXuLy): bool
     {
-        $stmt = $this->pdo->prepare("UPDATE bao_hong SET trang_thai_xu_ly = :tt WHERE id = :id");
-        return $stmt->execute(['tt' => $trangThaiMoi, 'id' => $id]);
+        $hanXuLy = self::tinhHanXuLy($mucDoUuTien);
+        $trangThai = self::xacDinhTrangThai($mucDoUuTien);
+
+        $stmt = $this->pdo->prepare("UPDATE bao_hong SET 
+            mo_ta_loi = :mo_ta, 
+            muc_do_uu_tien = :uu_tien, 
+            han_xu_ly = :han_xu_ly, 
+            trang_thai = :trang_thai, 
+            trang_thai_xu_ly = :trang_thai_xu_ly 
+            WHERE id = :id");
+
+        return $stmt->execute([
+            'mo_ta'           => $moTaLoi,
+            'uu_tien'         => $mucDoUuTien,
+            'han_xu_ly'       => $hanXuLy,
+            'trang_thai'      => $trangThai,
+            'trang_thai_xu_ly' => $trangThaiXuLy,
+            'id'              => $id
+        ]);
     }
 
-    /** Tìm tài khoản cán bộ lab theo tên đăng nhập, dùng cho chức năng đăng nhập. */
+    /** Tìm tài khoản cán bộ lab */
     public function timTaiKhoan(string $tenDangNhap): ?array
     {
         $stmt = $this->pdo->prepare("SELECT * FROM can_bo WHERE ten_dang_nhap = :tdn");
@@ -148,7 +175,7 @@ class BaoHongRepository
         return $kq ?: null;
     }
 
-    // ---------- Hàm nghiệp vụ tự định nghĩa (giữ lại từ Buổi 2) ----------
+    // ---------- Hàm nghiệp vụ ----------
 
     public static function tinhHanXuLy(string $mucDoUuTien): string
     {
@@ -172,7 +199,7 @@ class BaoHongRepository
         return (strpos($trangThai, 'Ngừng cho mượn') !== false);
     }
 
-    // ---------- Validate + chuẩn hóa (Buổi 3) ----------
+    // ---------- Validate + chuẩn hóa ----------
 
     public static function chuanHoaChuoi(string $s): string
     {
@@ -180,7 +207,6 @@ class BaoHongRepository
         return preg_replace('/\s+/', ' ', $s);
     }
 
-    /** Trả về mảng lỗi RIÊNG CHO TỪNG TRƯỜNG (key = tên trường) để View hiển thị đúng vị trí. */
     public static function kiemTraDuLieu(array $d): array
     {
         $loi = [];
@@ -225,7 +251,7 @@ class BaoHongRepository
 $host = 'localhost';
 $ten_db = 'qlpttb_buoi2';
 $user = 'root';
-$mk = ''; // XAMPP mặc định để rỗng
+$mk = '';
 
 try {
     $pdoGoc = new PDO("mysql:host={$host};charset=utf8mb4", $user, $mk, [
@@ -238,18 +264,16 @@ try {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
 } catch (PDOException $e) {
-    die('Lỗi kết nối cơ sở dữ liệu. Hãy chắc chắn MySQL trong XAMPP đang chạy. Chi tiết: ' . $e->getMessage());
+    die('Lỗi kết nối cơ sở dữ liệu: ' . $e->getMessage());
 }
 
 $repo = new BaoHongRepository($pdo);
 $repo->khoiTaoCoSoDuLieu();
 
 // ================== 3. CONTROLLER ==================
-// Chỉ chạy khi store.php được truy cập TRỰC TIẾP (không chạy khi form.php require_once file này).
-// Đây là kỹ thuật tách Controller khỏi View trong khi vẫn dùng chung 1 class Repository.
 if (basename($_SERVER['SCRIPT_FILENAME']) === basename(__FILE__)) {
 
-    // ---- Buổi 8: endpoint JSON cho Fetch ----
+    // Endpoint API JSON
     if (($_GET['action'] ?? '') === 'api') {
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode([
@@ -259,7 +283,7 @@ if (basename($_SERVER['SCRIPT_FILENAME']) === basename(__FILE__)) {
         exit;
     }
 
-    // ---- Buổi 7: đăng nhập ----
+    // Đăng nhập
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['hanh_dong'] ?? '') === 'dang_nhap') {
         $taiKhoan = $repo->timTaiKhoan(trim($_POST['ten_dang_nhap'] ?? ''));
 
@@ -273,7 +297,7 @@ if (basename($_SERVER['SCRIPT_FILENAME']) === basename(__FILE__)) {
         exit;
     }
 
-    // ---- Buổi 7: đăng xuất ----
+    // Đăng xuất
     if (($_GET['action'] ?? '') === 'dang_xuat') {
         unset($_SESSION['can_bo']);
         $_SESSION['thong_bao_thanh_cong'] = 'Đã đăng xuất.';
@@ -281,33 +305,35 @@ if (basename($_SERVER['SCRIPT_FILENAME']) === basename(__FILE__)) {
         exit;
     }
 
-    // ---- Buổi 7: cập nhật trạng thái bảo trì - CHỈ CÁN BỘ LAB ĐÃ ĐĂNG NHẬP ----
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['hanh_dong'] ?? '') === 'cap_nhat_trang_thai') {
-
-        // TEST CASE (buổi 7): truy cập hành động này khi CHƯA đăng nhập -> phải bị từ chối,
-        // dữ liệu KHÔNG được cập nhật, và có thông báo lỗi rõ ràng.
+    // Cập nhật chi tiết phiếu báo hỏng
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['hanh_dong'] ?? '') === 'cap_nhat_phieu') {
         if (!isset($_SESSION['can_bo'])) {
-            $_SESSION['loi_validate'] = ['Bạn cần đăng nhập với vai trò cán bộ lab để cập nhật trạng thái bảo trì.'];
+            $_SESSION['loi_validate'] = ['Bạn cần đăng nhập để thực hiện cập nhật.'];
             header('Location: form.php');
             exit;
         }
 
         $id = (int) ($_POST['id'] ?? 0);
-        $trangThaiMoi = $_POST['trang_thai_xu_ly'] ?? '';
+        $moTaLoi = BaoHongRepository::chuanHoaChuoi($_POST['mo_ta_loi'] ?? '');
+        $mucDoUuTien = $_POST['muc_do_uu_tien'] ?? '';
+        $trangThaiXuLy = $_POST['trang_thai_xu_ly'] ?? '';
 
-        if ($repo->timTheoId($id) && in_array($trangThaiMoi, ['Chưa xử lý', 'Đang xử lý', 'Đã xử lý'], true)) {
-            $repo->capNhatTrangThaiXuLy($id, $trangThaiMoi);
-            $_SESSION['thong_bao_thanh_cong'] = 'Đã cập nhật trạng thái xử lý phiếu #' . $id . '.';
+        if ($repo->timTheoId($id) 
+            && $moTaLoi !== '' 
+            && in_array($mucDoUuTien, ['Cao', 'Trung bình', 'Thấp'], true)
+            && in_array($trangThaiXuLy, ['Chưa xử lý', 'Đang xử lý', 'Đã xử lý'], true)) {
+            
+            $repo->capNhatPhieu($id, $moTaLoi, $mucDoUuTien, $trangThaiXuLy);
+            $_SESSION['thong_bao_thanh_cong'] = 'Đã cập nhật thành công thông tin cho phiếu #' . $id . '.';
         } else {
-            $_SESSION['loi_validate'] = ['Dữ liệu cập nhật không hợp lệ.'];
+            $_SESSION['loi_validate'] = ['Dữ liệu cập nhật không hợp lệ. Vui lòng kiểm tra lại.'];
         }
         header('Location: form.php');
         exit;
     }
 
-    // ---- Buổi 2-3: gửi phiếu báo hỏng (validate chi tiết + chuẩn hóa + chống XSS ở View) ----
+    // Gửi báo hỏng
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['hanh_dong'] ?? '') === 'gui_bao_hong') {
-
         $duLieu = [
             'ma_thiet_bi'    => strtoupper(BaoHongRepository::chuanHoaChuoi($_POST['ma_thiet_bi'] ?? '')),
             'ten_thiet_bi'   => BaoHongRepository::chuanHoaChuoi($_POST['ten_thiet_bi'] ?? ''),
@@ -319,8 +345,8 @@ if (basename($_SERVER['SCRIPT_FILENAME']) === basename(__FILE__)) {
         $loi = BaoHongRepository::kiemTraDuLieu($duLieu);
 
         if (!empty($loi)) {
-            $_SESSION['loi_truong'] = $loi;   // lỗi riêng từng trường
-            $_SESSION['du_lieu_cu'] = $duLieu; // giữ lại dữ liệu hợp lệ đã nhập
+            $_SESSION['loi_truong'] = $loi;
+            $_SESSION['du_lieu_cu'] = $duLieu;
             header('Location: form.php');
             exit;
         }
@@ -331,14 +357,13 @@ if (basename($_SERVER['SCRIPT_FILENAME']) === basename(__FILE__)) {
         if ($repo->themMoi($duLieu)) {
             $_SESSION['thong_bao_thanh_cong'] = 'Đã ghi nhận báo hỏng thiết bị "' . $duLieu['ten_thiet_bi'] . '" thành công!';
         } else {
-            $_SESSION['loi_validate'] = ['Có lỗi xảy ra khi lưu dữ liệu vào cơ sở dữ liệu.'];
+            $_SESSION['loi_validate'] = ['Có lỗi xảy ra khi lưu dữ liệu.'];
             $_SESSION['du_lieu_cu'] = $duLieu;
         }
         header('Location: form.php');
         exit;
     }
 
-    // Không khớp hành động nào (hoặc GET thường) -> quay lại View
     header('Location: form.php');
     exit;
 }

@@ -2,18 +2,14 @@
 /**
  * form.php
  * =====================================================
- * VIEW: chỉ hiển thị giao diện. Toàn bộ xử lý (validate, INSERT, UPDATE, đăng nhập...)
- * nằm ở store.php (Controller). File này require_once store.php để tái sử dụng
- * class BaoHongRepository + kết nối $pdo, nhưng phần Controller trong store.php
- * sẽ KHÔNG chạy (xem điều kiện basename() cuối store.php).
+ * VIEW: Hiển thị giao diện báo hỏng & Lịch sử báo hỏng.
  * =====================================================
  */
 require_once __DIR__ . '/store.php';
-// Từ đây có sẵn: $pdo, $repo (BaoHongRepository), session đã start.
 
-// ===== Lấy thông báo/lỗi từ store.php (nếu vừa redirect về) =====
-$loiTruong = $_SESSION['loi_truong'] ?? [];         // lỗi riêng từng trường (Buổi 3)
-$loiValidate = $_SESSION['loi_validate'] ?? [];       // lỗi chung (VD: chưa đăng nhập)
+// ===== Lấy thông báo/lỗi từ session =====
+$loiTruong = $_SESSION['loi_truong'] ?? [];
+$loiValidate = $_SESSION['loi_validate'] ?? [];
 $duLieuCu = $_SESSION['du_lieu_cu'] ?? [];
 $thongBaoThanhCong = $_SESSION['thong_bao_thanh_cong'] ?? '';
 $loiDangNhap = $_SESSION['loi_dang_nhap'] ?? '';
@@ -25,17 +21,24 @@ unset(
 $daDangNhap = isset($_SESSION['can_bo']);
 $tenCanBo = $_SESSION['can_bo']['ho_ten'] ?? '';
 
-/** Helper hiển thị: mã hóa để chống XSS khi in giá trị cũ ra input. */
+/** Helper hiển thị: mã hóa chống XSS */
 function giaTri(array $duLieuCu, string $ten): string
 {
     return htmlspecialchars($duLieuCu[$ten] ?? '', ENT_QUOTES, 'UTF-8');
 }
 
-// ===== Dữ liệu hiển thị bảng lịch sử (đọc qua Repository, không có SQL ở đây) =====
-$danhSachBaoHong = $repo->layDanhSach();
+// ===== Lấy từ khóa và tham số tìm kiếm từ GET =====
+$tuKhoaTimKiem = trim($_GET['tu_khoa'] ?? '');
+$locUuTien = trim($_GET['uu_tien'] ?? '');
+$locTrangThai = trim($_GET['trang_thai_xu_ly'] ?? '');
 
+// ===== Lấy danh sách phiếu báo hỏng (Có áp dụng tìm kiếm & lọc) =====
+$danhSachBaoHong = $repo->timKiemDanhSach($tuKhoaTimKiem, $locUuTien, $locTrangThai);
+
+// Tính toán thống kê trên toàn bộ dữ liệu gốc
+$tatCaPhieu = $repo->layDanhSach();
 $soLuongTheoMuc = ['Cao' => 0, 'Trung bình' => 0, 'Thấp' => 0];
-foreach ($danhSachBaoHong as $phieu) {
+foreach ($tatCaPhieu as $phieu) {
     if (isset($soLuongTheoMuc[$phieu['muc_do_uu_tien']])) {
         $soLuongTheoMuc[$phieu['muc_do_uu_tien']]++;
     }
@@ -50,14 +53,14 @@ foreach ($danhSachBaoHong as $phieu) {
 * { box-sizing: border-box; }
 body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #f4f6f9; color: #1f2937; }
 .header { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #fff; padding: 24px 20px; }
-.header-top { display: flex; justify-content: space-between; align-items: center; max-width: 980px; margin: 0 auto; flex-wrap: wrap; gap: 10px; }
+.header-top { display: flex; justify-content: space-between; align-items: center; max-width: 1100px; margin: 0 auto; flex-wrap: wrap; gap: 10px; }
 .header h1 { margin: 0 0 4px; font-size: 24px; }
 .subtitle { margin: 0; opacity: 0.9; font-size: 13px; }
 .auth-box { font-size: 13px; background: rgba(255,255,255,0.12); padding: 8px 14px; border-radius: 8px; }
-.auth-box a { color: #fff; font-weight: 600; }
+.auth-box a { color: #fff; font-weight: 600; text-decoration: underline; }
 .auth-box input { padding: 6px 8px; border-radius: 5px; border: none; font-size: 13px; margin-left: 4px; width: 110px; }
 .auth-box button { padding: 6px 10px; border-radius: 5px; border: none; background: #fff; color: #1e3a8a; font-weight: 700; cursor: pointer; margin-left: 4px; }
-.container { max-width: 980px; margin: 30px auto; padding: 0 16px 60px; display: flex; flex-direction: column; gap: 24px; }
+.container { max-width: 1100px; margin: 30px auto; padding: 0 16px 60px; display: flex; flex-direction: column; gap: 24px; }
 .card { background: #fff; border-radius: 10px; padding: 22px 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 .card h2 { margin-top: 0; font-size: 19px; border-left: 4px solid #2563eb; padding-left: 10px; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -81,9 +84,19 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #2563eb
 .badge-tb { background: #fef3c7; color: #92400e; }
 .badge-thap { background: #dcfce7; color: #166534; }
 .badge-tong { background: #e0e7ff; color: #3730a3; }
+
+/* CSS Khung Tìm kiếm */
+.search-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 20px; }
+.search-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.search-form input[type="text"] { flex: 2; min-width: 200px; }
+.search-form select { flex: 1; min-width: 140px; }
+.btn-search { background: #0284c7; color: #fff; border: none; padding: 9px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+.btn-search:hover { background: #0369a1; }
+.btn-reset { background: #64748b; color: #fff; text-decoration: none; padding: 9px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; }
+
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th, td { padding: 9px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+th, td { padding: 9px 8px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: middle; }
 th { background: #f9fafb; font-weight: 700; white-space: nowrap; }
 tbody tr:hover { background: #f9fafb; }
 .tag { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -96,14 +109,18 @@ tbody tr:hover { background: #f9fafb; }
 .tag-dang-xu-ly { background: #fef3c7; color: #92400e; }
 .tag-da-xu-ly { background: #dcfce7; color: #166534; }
 .rong { color: #6b7280; font-style: italic; }
-.mini-form { display: flex; gap: 6px; align-items: center; }
-.mini-form select { padding: 4px 6px; font-size: 12px; width: auto; }
-.mini-form button { padding: 4px 8px; font-size: 12px; border: none; border-radius: 5px; background: #2563eb; color: #fff; cursor: pointer; }
-.khoa { color: #9ca3af; font-size: 12px; font-style: italic; }
+
+/* CSS Input khi chỉnh sửa trực tiếp trên bảng */
+.edit-input { width: 100%; min-width: 120px; font-size: 12px; padding: 5px 6px; }
+.edit-select { font-size: 12px; padding: 5px 6px; width: auto; }
+.btn-save { padding: 5px 10px; font-size: 12px; border: none; border-radius: 5px; background: #16a34a; color: #fff; cursor: pointer; font-weight: 600; }
+.btn-save:hover { background: #15803d; }
+.khoa { color: #9ca3af; font-size: 11px; font-style: italic; margin-top: 2px; }
+
 #ket-qua-api { font-size: 13px; }
 #ket-qua-api .dong { padding: 6px 0; border-bottom: 1px dashed #e5e7eb; }
 .api-btn { padding: 8px 16px; border-radius: 6px; border: none; background: #374151; color: #fff; font-size: 13px; cursor: pointer; }
-@media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } .search-form { flex-direction: column; align-items: stretch; } }
 </style>
 </head>
 <body>
@@ -112,7 +129,7 @@ tbody tr:hover { background: #f9fafb; }
     <div class="header-top">
         <div>
             <h1>🛠️ Báo hỏng thiết bị</h1>
-            <p class="subtitle">Hệ thống quản lý phòng thực hành và thiết bị &middot; Người 4: Báo hỏng &amp; Bảo trì</p>
+            <p class="subtitle">Hệ thống quản lý phòng thực hành và thiết bị &middot; Báo hỏng &amp; Bảo trì</p>
         </div>
 
         <?php if ($daDangNhap): ?>
@@ -150,6 +167,7 @@ tbody tr:hover { background: #f9fafb; }
         <div class="thong-bao thong-bao-thanh-cong"><?= htmlspecialchars($thongBaoThanhCong) ?></div>
     <?php endif; ?>
 
+    <!-- FORM BÁO HỎNG -->
     <section class="card">
         <h2>Phiếu báo hỏng thiết bị</h2>
 
@@ -202,6 +220,7 @@ tbody tr:hover { background: #f9fafb; }
         </form>
     </section>
 
+    <!-- BẢNG LỊCH SỬ VÀ TÌM KIẾM -->
     <section class="card">
         <h2>Lịch sử báo hỏng / bảo trì</h2>
 
@@ -209,28 +228,55 @@ tbody tr:hover { background: #f9fafb; }
             <span class="badge badge-cao">Cao: <?= $soLuongTheoMuc['Cao'] ?></span>
             <span class="badge badge-tb">Trung bình: <?= $soLuongTheoMuc['Trung bình'] ?></span>
             <span class="badge badge-thap">Thấp: <?= $soLuongTheoMuc['Thấp'] ?></span>
-            <span class="badge badge-tong">Tổng: <?= count($danhSachBaoHong) ?></span>
+            <span class="badge badge-tong">Tổng: <?= count($tatCaPhieu) ?></span>
+        </div>
+
+        <!-- THANH TÌM KIẾM VÀ LỌC -->
+        <div class="search-box">
+            <form method="GET" action="form.php" class="search-form">
+                <input type="text" name="tu_khoa" value="<?= htmlspecialchars($tuKhoaTimKiem) ?>" placeholder="🔍 Tìm theo mã TB, tên TB, người báo...">
+                
+                <select name="uu_tien">
+                    <option value="">-- Tất cả mức độ --</option>
+                    <?php foreach (['Cao', 'Trung bình', 'Thấp'] as $m): ?>
+                        <option value="<?= $m ?>" <?= $locUuTien === $m ? 'selected' : '' ?>><?= $m ?></option>
+                    <?php endforeach; ?>
+                </select>
+
+                <select name="trang_thai_xu_ly">
+                    <option value="">-- Tất cả trạng thái --</option>
+                    <?php foreach (['Chưa xử lý', 'Đang xử lý', 'Đã xử lý'] as $tt): ?>
+                        <option value="<?= $tt ?>" <?= $locTrangThai === $tt ? 'selected' : '' ?>><?= $tt ?></option>
+                    <?php endforeach; ?>
+                </select>
+
+                <button type="submit" class="btn-search">Tìm kiếm</button>
+                <?php if ($tuKhoaTimKiem !== '' || $locUuTien !== '' || $locTrangThai !== ''): ?>
+                    <a href="form.php" class="btn-reset">Đặt lại</a>
+                <?php endif; ?>
+            </form>
         </div>
 
         <?php if (empty($danhSachBaoHong)): ?>
-            <p class="rong">Chưa có phiếu báo hỏng nào.</p>
+            <p class="rong">Không tìm thấy phiếu báo hỏng nào phù hợp.</p>
         <?php else: ?>
         <div class="table-wrap">
         <table>
             <thead>
-    <tr>
-        <th>#</th>
-        <th>Mã TB</th>
-        <th>Tên thiết bị</th>
-        <th>Người báo hỏng</th>
-        <th>Mô tả lỗi</th> <!-- THÊM CỘT NÀY -->
-        <th>Ưu tiên</th>
-        <th>Hạn xử lý</th>
-        <th>Cho mượn?</th>
-        <th>Trạng thái xử lý</th>
-        <th>Thời gian</th>
-    </tr>
-</thead>
+                <tr>
+                    <th>#</th>
+                    <th>Mã TB</th>
+                    <th>Tên thiết bị</th>
+                    <th>Người báo hỏng</th>
+                    <th>Mô tả lỗi</th>
+                    <th>Ưu tiên</th>
+                    <th>Hạn xử lý</th>
+                    <th>Cho mượn?</th>
+                    <th>Trạng thái xử lý</th>
+                    <th>Thời gian</th>
+                    <?php if ($daDangNhap): ?><th>Thao tác</th><?php endif; ?>
+                </tr>
+            </thead>
             <tbody>
                 <?php $stt = 1; ?>
                 <?php foreach ($danhSachBaoHong as $phieu): ?>
@@ -240,32 +286,53 @@ tbody tr:hover { background: #f9fafb; }
                         $mapClass = ['Chưa xử lý' => 'chua-xu-ly', 'Đang xử lý' => 'dang-xu-ly', 'Đã xử lý' => 'da-xu-ly'];
                     ?>
                     <tr>
-                        <td><?= $stt++ ?></td>
-                        <td><?= htmlspecialchars($phieu['ma_thiet_bi']) ?></td>
-                        <td><?= htmlspecialchars($phieu['ten_thiet_bi']) ?></td>
-                        <td><?= htmlspecialchars($phieu['nguoi_bao_hong']) ?></td>
-                        <td><?= htmlspecialchars($phieu['mo_ta_loi']) ?></td>
-                        <td><span class="tag tag-<?= $phieu['muc_do_uu_tien'] === 'Cao' ? 'cao' : ($phieu['muc_do_uu_tien'] === 'Trung bình' ? 'tb' : 'thap') ?>"><?= htmlspecialchars($phieu['muc_do_uu_tien']) ?></span></td>
-                        <td><?= htmlspecialchars($phieu['han_xu_ly']) ?></td>
-                        <td><?php if ($khongChoMuon): ?><span class="tag tag-khong-cho-muon">Không</span><?php else: ?><span class="tag tag-cho-muon">Có</span><?php endif; ?></td>
-                        <td>
-                            <?php if ($daDangNhap): ?>
-                                <form class="mini-form" method="POST" action="store.php">
-                                    <input type="hidden" name="hanh_dong" value="cap_nhat_trang_thai">
-                                    <input type="hidden" name="id" value="<?= (int)$phieu['id'] ?>">
-                                    <select name="trang_thai_xu_ly">
+                        <?php if ($daDangNhap): ?>
+                            <!-- FORM CẬP NHẬT TOÀN BỘ KHI ĐÃ ĐĂNG NHẬP -->
+                            <form method="POST" action="store.php">
+                                <input type="hidden" name="hanh_dong" value="cap_nhat_phieu">
+                                <input type="hidden" name="id" value="<?= (int)$phieu['id'] ?>">
+                                
+                                <td><?= $stt++ ?></td>
+                                <td><b><?= htmlspecialchars($phieu['ma_thiet_bi']) ?></b></td>
+                                <td><?= htmlspecialchars($phieu['ten_thiet_bi']) ?></td>
+                                <td><?= htmlspecialchars($phieu['nguoi_bao_hong']) ?></td>
+                                <td>
+                                    <input type="text" name="mo_ta_loi" class="edit-input" value="<?= htmlspecialchars($phieu['mo_ta_loi']) ?>" required>
+                                </td>
+                                <td>
+                                    <select name="muc_do_uu_tien" class="edit-select">
+                                        <?php foreach (['Cao', 'Trung bình', 'Thấp'] as $muc): ?>
+                                            <option value="<?= $muc ?>" <?= $phieu['muc_do_uu_tien'] === $muc ? 'selected' : '' ?>><?= $muc ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </td>
+                                <td><?= htmlspecialchars($phieu['han_xu_ly']) ?></td>
+                                <td><?php if ($khongChoMuon): ?><span class="tag tag-khong-cho-muon">Không</span><?php else: ?><span class="tag tag-cho-muon">Có</span><?php endif; ?></td>
+                                <td>
+                                    <select name="trang_thai_xu_ly" class="edit-select">
                                         <?php foreach (['Chưa xử lý', 'Đang xử lý', 'Đã xử lý'] as $tt): ?>
                                             <option value="<?= $tt ?>" <?= $trangThaiXuLy === $tt ? 'selected' : '' ?>><?= $tt ?></option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <button type="submit">Lưu</button>
-                                </form>
-                            <?php else: ?>
-                                <span class="tag tag-<?= $mapClass[$trangThaiXuLy] ?>"><?= htmlspecialchars($trangThaiXuLy) ?></span>
-                                <div class="khoa">Đăng nhập cán bộ lab để sửa</div>
-                            <?php endif; ?>
-                        </td>
-                        <td><?= htmlspecialchars(date('d/m/Y H:i', strtotime($phieu['ngay_bao_hong']))) ?></td>
+                                </td>
+                                <td><?= htmlspecialchars(date('d/m/Y H:i', strtotime($phieu['ngay_bao_hong']))) ?></td>
+                                <td>
+                                    <button type="submit" class="btn-save">Lưu</button>
+                                </td>
+                            </form>
+                        <?php else: ?>
+                            <!-- HIỂN THỊ TĨNH KHI CHƯA ĐĂNG NHẬP -->
+                            <td><?= $stt++ ?></td>
+                            <td><b><?= htmlspecialchars($phieu['ma_thiet_bi']) ?></b></td>
+                            <td><?= htmlspecialchars($phieu['ten_thiet_bi']) ?></td>
+                            <td><?= htmlspecialchars($phieu['nguoi_bao_hong']) ?></td>
+                            <td><?= htmlspecialchars($phieu['mo_ta_loi']) ?></td>
+                            <td><span class="tag tag-<?= $phieu['muc_do_uu_tien'] === 'Cao' ? 'cao' : ($phieu['muc_do_uu_tien'] === 'Trung bình' ? 'tb' : 'thap') ?>"><?= htmlspecialchars($phieu['muc_do_uu_tien']) ?></span></td>
+                            <td><?= htmlspecialchars($phieu['han_xu_ly']) ?></td>
+                            <td><?php if ($khongChoMuon): ?><span class="tag tag-khong-cho-muon">Không</span><?php else: ?><span class="tag tag-cho-muon">Có</span><?php endif; ?></td>
+                            <td><span class="tag tag-<?= $mapClass[$trangThaiXuLy] ?>"><?= htmlspecialchars($trangThaiXuLy) ?></span></td>
+                            <td><?= htmlspecialchars(date('d/m/Y H:i', strtotime($phieu['ngay_bao_hong']))) ?></td>
+                        <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -274,10 +341,10 @@ tbody tr:hover { background: #f9fafb; }
         <?php endif; ?>
     </section>
 
+    <!-- DEMO FETCH API -->
     <section class="card">
-        <h2>Xem nhanh qua API (demo Fetch - Buổi 8)</h2>
-        <p class="hint" style="margin-bottom:12px;">Gọi endpoint JSON <code>store.php?action=api</code> bằng JavaScript Fetch,
-        có xử lý trạng thái đang tải và lỗi.</p>
+        <h2>Xem nhanh qua API (demo Fetch)</h2>
+        <p class="hint" style="margin-bottom:12px;">Gọi endpoint JSON <code>store.php?action=api</code> bằng JavaScript Fetch.</p>
         <button type="button" class="api-btn" id="btn-tai-api">Tải danh sách qua API</button>
         <div id="ket-qua-api" style="margin-top:14px;"></div>
     </section>
