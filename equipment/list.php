@@ -25,6 +25,8 @@ $allowedStatus = ['all', 'active', 'broken', 'maintenance', 'borrowed'];
 if (!in_array($statusFilter, $allowedStatus, true)) {
     $statusFilter = 'all';
 }
+// Tìm kiếm chỉ theo tên thiết bị
+$q = trim($_GET['q'] ?? '');
 
 $sql = "SELECT e.*, t.ten_loai, r.ma_phong, r.ten_phong
         FROM equipment e
@@ -40,6 +42,10 @@ if ($typeFilter) {
 if ($statusFilter !== 'all') {
     $sql .= " AND e.trang_thai = :trang_thai";
     $params['trang_thai'] = $statusFilter;
+}
+if ($q !== '') {
+    $sql .= " AND e.ten_thiet_bi LIKE :q";
+    $params['q'] = '%' . $q . '%';
 }
 $sql .= " ORDER BY e.ma_thiet_bi";
 
@@ -83,7 +89,23 @@ require_once __DIR__ . '/../includes/app_head.php';
     <div class="alert alert-error"><?php echo htmlspecialchars($msg); ?></div>
 <?php endif; ?>
 
+<form method="get" class="filter-form" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <input
+        type="text"
+        name="q"
+        class="search-input"
+        placeholder="Tìm thiết bị theo tên..."
+        value="<?php echo htmlspecialchars($q); ?>"
+        style="flex:1 1 320px;max-width:420px;"
+    >
+    <button type="submit" class="btn btn-secondary" style="padding:9px 14px;">Tìm kiếm</button>
+    <?php if ($q !== ''): ?>
+        <a href="/equipment/list.php" class="btn btn-secondary">Xoá lọc</a>
+    <?php endif; ?>
+</form>
+
 <form method="get" class="filter-form">
+    <input type="hidden" name="q" value="<?php echo htmlspecialchars($q); ?>">
     <label style="display:inline-block;margin-right:8px;">Loại</label>
     <select name="type_id" onchange="this.form.submit()">
         <option value="">Tất cả</option>
@@ -104,11 +126,13 @@ require_once __DIR__ . '/../includes/app_head.php';
     </select>
 </form>
 
-<?php if ($canManage): ?>
-    <p style="margin:0 0 16px;">
+<p style="margin:0 0 16px;display:flex;gap:10px;flex-wrap:wrap;">
+    <?php if ($canManage): ?>
         <a href="/equipment/form.php" class="btn btn-primary">+ Thêm thiết bị</a>
-    </p>
-<?php endif; ?>
+        <a href="/equipment/import.php" class="btn btn-secondary">⇪ Thêm từ file</a>
+    <?php endif; ?>
+    <a href="/equipment/export.php?q=<?php echo urlencode($q); ?>&type_id=<?php echo $typeFilter ? (int) $typeFilter : ''; ?>&trang_thai=<?php echo urlencode($statusFilter); ?>" class="btn btn-secondary">⇩ Xuất file</a>
+</p>
 
 <?php if (empty($equipmentList)): ?>
     <div class="empty-state">Không có thiết bị nào phù hợp với bộ lọc.</div>
@@ -142,9 +166,12 @@ require_once __DIR__ . '/../includes/app_head.php';
                     <a href="/reports/create.php?equipment_id=<?php echo $e['id']; ?>" class="btn btn-secondary">Báo hỏng</a>
                     <?php if ($canManage): ?>
                         <a href="/equipment/form.php?id=<?php echo $e['id']; ?>" class="btn btn-secondary">Sửa</a>
-                        <a href="/equipment/delete.php?id=<?php echo $e['id']; ?>&csrf_token=<?php echo urlencode(csrf_token()); ?>"
-                           class="btn btn-danger"
-                           onclick="return confirm('Bạn có chắc muốn xoá thiết bị này?');">Xoá</a>
+                        <form method="post" action="/equipment/delete.php" style="display:inline;"
+                              onsubmit="return confirm('Bạn có chắc muốn xoá thiết bị này?');">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token()); ?>">
+                            <input type="hidden" name="id" value="<?php echo (int) $e['id']; ?>">
+                            <button type="submit" class="btn btn-danger">Xoá</button>
+                        </form>
                     <?php endif; ?>
                 </td>
             </tr>

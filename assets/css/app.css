@@ -129,30 +129,7 @@
   top: 0;
   z-index: 20;
 }
-.app-topbar h1 { margin: 0; font-size: 1.35rem; }
-
-.topbar-search {
-  flex: 1;
-  max-width: 360px;
-  position: relative;
-}
-.topbar-search input {
-  width: 100%;
-  padding: 9px 14px 9px 38px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: #f8fafc;
-  font-size: .88rem;
-}
-.topbar-search svg {
-  position: absolute;
-  left: 13px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-  color: var(--color-text-muted);
-}
+.app-topbar h1 { margin: 0; font-size: 1.35rem; flex: 1; }
 
 .topbar-actions {
   display: flex;
@@ -513,7 +490,6 @@
   }
   .app-sidebar.open { left: 0; }
   .app-content { width: 100%; }
-  .topbar-search { display: none; }
   .sidebar-scrim {
     display: none;
     position: fixed; inset: 0;

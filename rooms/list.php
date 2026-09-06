@@ -19,7 +19,15 @@ require_login();
 $user = current_user();
 $canManage = in_array($user['role'] ?? '', ['admin', 'lab_staff'], true);
 
-$rooms = $pdo->query("SELECT * FROM rooms ORDER BY ma_phong")->fetchAll();
+// Tìm kiếm phòng theo tên (chỉ theo tên, không tìm theo mã/vị trí)
+$q = trim($_GET['q'] ?? '');
+if ($q !== '') {
+    $stmt = $pdo->prepare("SELECT * FROM rooms WHERE ten_phong LIKE :q ORDER BY ma_phong");
+    $stmt->execute(['q' => '%' . $q . '%']);
+    $rooms = $stmt->fetchAll();
+} else {
+    $rooms = $pdo->query("SELECT * FROM rooms ORDER BY ma_phong")->fetchAll();
+}
 
 function room_status_label(string $status): string
 {
@@ -53,14 +61,33 @@ require_once __DIR__ . '/../includes/app_head.php';
     <div class="alert alert-error"><?php echo htmlspecialchars($msg); ?></div>
 <?php endif; ?>
 
-<?php if ($canManage): ?>
-    <p style="margin:0 0 16px;">
+<form method="get" class="filter-form" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <input
+        type="text"
+        name="q"
+        class="search-input"
+        placeholder="Tìm phòng theo tên..."
+        value="<?php echo htmlspecialchars($q); ?>"
+        style="flex:1 1 320px;max-width:420px;"
+    >
+    <button type="submit" class="btn btn-secondary" style="padding:9px 14px;">Tìm kiếm</button>
+    <?php if ($q !== ''): ?>
+        <a href="/rooms/list.php" class="btn btn-secondary">Xoá lọc</a>
+    <?php endif; ?>
+</form>
+
+<p style="margin:0 0 16px;display:flex;gap:10px;flex-wrap:wrap;">
+    <?php if ($canManage): ?>
         <a href="/rooms/form.php" class="btn btn-primary">+ Thêm phòng</a>
-    </p>
-<?php endif; ?>
+        <a href="/rooms/import.php" class="btn btn-secondary">⇪ Thêm từ file</a>
+    <?php endif; ?>
+    <a href="/rooms/export.php?q=<?php echo urlencode($q); ?>" class="btn btn-secondary">⇩ Xuất file</a>
+</p>
 
 <?php if (empty($rooms)): ?>
-    <div class="empty-state">Chưa có phòng thực hành nào.</div>
+    <div class="empty-state">
+        <?php echo $q !== '' ? 'Không tìm thấy phòng nào có tên phù hợp.' : 'Chưa có phòng thực hành nào.'; ?>
+    </div>
 <?php else: ?>
     <table class="data-table">
         <thead>
@@ -90,9 +117,12 @@ require_once __DIR__ . '/../includes/app_head.php';
                 <?php if ($canManage): ?>
                     <td>
                         <a href="/rooms/form.php?id=<?php echo $r['id']; ?>" class="btn btn-secondary">Sửa</a>
-                        <a href="/rooms/delete.php?id=<?php echo $r['id']; ?>&csrf_token=<?php echo urlencode(csrf_token()); ?>"
-                           class="btn btn-danger"
-                           onclick="return confirm('Bạn có chắc muốn xoá phòng này?');">Xoá</a>
+                        <form method="post" action="/rooms/delete.php" style="display:inline;"
+                              onsubmit="return confirm('Bạn có chắc muốn xoá phòng này?');">
+                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(csrf_token()); ?>">
+                            <input type="hidden" name="id" value="<?php echo (int) $r['id']; ?>">
+                            <button type="submit" class="btn btn-danger">Xoá</button>
+                        </form>
                     </td>
                 <?php endif; ?>
             </tr>

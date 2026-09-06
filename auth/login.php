@@ -258,15 +258,6 @@ $page_title = 'Đăng nhập';
 
         <p class="auth-switch">Chưa có tài khoản? <a href="/auth/register.php">Đăng ký ngay</a></p>
         <p class="auth-back"><a href="/index.php">&larr; Về trang chủ</a></p>
-
-        <div class="auth-demo-hint">
-            <p>Tài khoản demo (dữ liệu mẫu, mật khẩu: <code>Matkhau123</code>):</p>
-            <ul>
-                <li>Admin: <code>mai.admin@nhom4.edu.vn</code></li>
-                <li>Cán bộ lab: <code>ky.labstaff@nhom4.edu.vn</code></li>
-                <li>Người dùng: <code>phan.sv@nhom4.edu.vn</code></li>
-            </ul>
-        </div>
     </div>
 </main>
 <script src="/assets/js/script.js"></script>

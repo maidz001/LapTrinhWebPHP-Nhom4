@@ -101,11 +101,6 @@ $active_menu = $active_menu ?? 'overview';
         <button class="nav-toggle" id="sidebarToggle" aria-label="Mở menu">☰</button>
         <h1><?php echo htmlspecialchars($page_title); ?></h1>
 
-        <div class="topbar-search">
-            <?php echo app_icon('search'); ?>
-            <input type="text" placeholder="Tìm kiếm..." disabled title="Sắp ra mắt">
-        </div>
-
         <div class="topbar-actions">
             <button class="topbar-bell" type="button" title="Thông báo" disabled>
                 <?php echo app_icon('bell'); ?>
