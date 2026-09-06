@@ -27,6 +27,7 @@ function app_icon(string $name): string
         'bell'     => '<path d="M6 10a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" /><path d="M10 20a2 2 0 0 0 4 0" />',
         'wrench'   => '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2 2.5-2.5Z" />',
         'calendar' => '<rect x="4" y="5" width="16" height="15" rx="1.6" /><path d="M8 3v4" /><path d="M16 3v4" /><path d="M4 10h16" />',
+        'check'    => '<circle cx="12" cy="12" r="8.5" /><path d="m8 12 2.5 2.5L16 9" />',
         'menu'     => '<path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" />',
         'chevron-left' => '<path d="M14 6l-6 6 6 6" />',
     ];

@@ -2,9 +2,14 @@
 /**
  * bookings/store.php
  * ---------------------------------------------------------------------
- * Xử lý lưu yêu cầu đặt phòng / mượn thiết bị (POST từ bookings/form.php).
- * Validate dữ liệu, kiểm tra trùng lịch, sau đó INSERT vào bảng bookings
- * với trang_thai = 'pending'.
+ * Xử lý tạo mới / cập nhật yêu cầu đặt phòng hoặc mượn thiết bị.
+ *
+ * - Validate dữ liệu
+ * - Kiểm tra tài nguyên
+ * - Kiểm tra thời gian
+ * - Kiểm tra trùng lịch
+ * - Tạo yêu cầu mới với trạng thái pending
+ * - Cho phép người dùng cập nhật yêu cầu khi còn pending
  * ---------------------------------------------------------------------
  */
 
@@ -12,9 +17,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth_check.php';
-require_once __DIR__ . '/../includes/flash.php';
 require_once __DIR__ . '/../includes/csrf.php';
-require_once __DIR__ . '/../includes/booking_helpers.php';
+require_once __DIR__ . '/../includes/flash.php';
+require_once __DIR__ . '/repository.php';
 
 require_login();
 
@@ -23,106 +28,315 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-function bookings_store_back_with_errors(array $errors, array $old): void
-{
-    $_SESSION['booking_errors'] = $errors;
-    $_SESSION['booking_old'] = $old;
-    header('Location: /bookings/form.php');
+/*
+ * Nếu có id thì đây là thao tác sửa.
+ * Nếu không có id thì đây là tạo mới.
+ */
+$id = max(0, (int) ($_POST['id'] ?? 0));
+
+$formUrl = '/bookings/form.php' . (
+    $id > 0
+        ? '?id=' . $id
+        : ''
+);
+
+/*
+ * Kiểm tra CSRF
+ */
+if (!csrf_verify($_POST['csrf_token'] ?? null)) {
+    flash_set(
+        'error',
+        'Phiên làm việc đã hết hạn. Vui lòng thử lại.'
+    );
+
+    header('Location: ' . $formUrl);
     exit;
 }
 
-$old = [
-    'loai_yeu_cau' => $_POST['loai_yeu_cau'] ?? '',
-    'room_id' => $_POST['room_id'] ?? '',
-    'equipment_id' => $_POST['equipment_id'] ?? '',
-    'thoi_gian_bat_dau' => $_POST['thoi_gian_bat_dau'] ?? '',
-    'thoi_gian_ket_thuc' => $_POST['thoi_gian_ket_thuc'] ?? '',
-    'muc_dich' => $_POST['muc_dich'] ?? '',
-];
 
-if (!csrf_verify($_POST['csrf_token'] ?? null)) {
-    bookings_store_back_with_errors(['Phiên làm việc đã hết hạn, vui lòng thử lại.'], $old);
-}
+/*
+ * Lấy dữ liệu form
+ */
+$type = (string) ($_POST['loai_yeu_cau'] ?? '');
+
+$roomId = max(
+    0,
+    (int) ($_POST['room_id'] ?? 0)
+);
+
+$equipmentId = max(
+    0,
+    (int) ($_POST['equipment_id'] ?? 0)
+);
+
+$startInput = trim(
+    (string) ($_POST['thoi_gian_bat_dau'] ?? '')
+);
+
+$endInput = trim(
+    (string) ($_POST['thoi_gian_ket_thuc'] ?? '')
+);
+
+$purpose = trim(
+    (string) ($_POST['muc_dich'] ?? '')
+);
 
 $errors = [];
-$loai = $old['loai_yeu_cau'];
 
-if (!in_array($loai, ['room', 'equipment'], true)) {
+
+/*
+ * Validate loại yêu cầu
+ */
+if (!in_array($type, ['room', 'equipment'], true)) {
     $errors[] = 'Loại yêu cầu không hợp lệ.';
 }
 
-$roomId = null;
-$equipmentId = null;
 
-if ($loai === 'room') {
-    $roomId = ctype_digit((string) $old['room_id']) ? (int) $old['room_id'] : null;
-    if (!$roomId) {
-        $errors[] = 'Vui lòng chọn phòng thực hành.';
-    }
-} elseif ($loai === 'equipment') {
-    $equipmentId = ctype_digit((string) $old['equipment_id']) ? (int) $old['equipment_id'] : null;
-    if (!$equipmentId) {
+/*
+ * Chỉ cho phép chọn đúng tài nguyên tương ứng
+ */
+$resourceId = $type === 'equipment'
+    ? $equipmentId
+    : $roomId;
+
+if ($resourceId <= 0) {
+
+    if ($type === 'equipment') {
         $errors[] = 'Vui lòng chọn thiết bị.';
+    } else {
+        $errors[] = 'Vui lòng chọn phòng.';
     }
+
+} elseif (
+    in_array($type, ['room', 'equipment'], true)
+    && !bookingResourceExists(
+        $pdo,
+        $type,
+        $resourceId
+    )
+) {
+
+    $errors[] =
+        'Phòng hoặc thiết bị đã chọn hiện không thể sử dụng.';
 }
 
-$mucDich = trim((string) $old['muc_dich']);
-if ($mucDich === '') {
-    $errors[] = 'Vui lòng nhập mục đích sử dụng.';
-} elseif (mb_strlen($mucDich) > 255) {
-    $errors[] = 'Mục đích sử dụng không được vượt quá 255 ký tự.';
+
+/*
+ * Kiểm tra mục đích
+ */
+$purposeLength = mb_strlen(
+    $purpose,
+    'UTF-8'
+);
+
+if ($purposeLength < 5 || $purposeLength > 255) {
+    $errors[] =
+        'Mục đích sử dụng phải có từ 5 đến 255 ký tự.';
 }
 
-$start = booking_to_mysql_datetime((string) $old['thoi_gian_bat_dau']);
-$end = booking_to_mysql_datetime((string) $old['thoi_gian_ket_thuc']);
 
-if (!$start || !$end) {
-    $errors[] = 'Thời gian bắt đầu/kết thúc không hợp lệ.';
-} elseif ($end <= $start) {
-    $errors[] = 'Thời gian kết thúc phải sau thời gian bắt đầu.';
-} elseif ($start < date('Y-m-d H:i:00')) {
-    $errors[] = 'Thời gian bắt đầu không được ở trong quá khứ.';
+/*
+ * Parse thời gian
+ */
+$startDate = DateTimeImmutable::createFromFormat(
+    'Y-m-d\TH:i',
+    $startInput
+);
+
+$endDate = DateTimeImmutable::createFromFormat(
+    'Y-m-d\TH:i',
+    $endInput
+);
+
+
+/*
+ * Kiểm tra thời gian bắt đầu
+ */
+if (
+    !$startDate
+    || $startDate->format('Y-m-d\TH:i') !== $startInput
+) {
+    $errors[] =
+        'Thời gian bắt đầu không hợp lệ.';
 }
 
-if ($errors) {
-    bookings_store_back_with_errors($errors, $old);
+
+/*
+ * Kiểm tra thời gian kết thúc
+ */
+if (
+    !$endDate
+    || $endDate->format('Y-m-d\TH:i') !== $endInput
+) {
+    $errors[] =
+        'Thời gian kết thúc không hợp lệ.';
 }
 
-// Kiểm tra phòng/thiết bị có tồn tại và đang khả dụng không
-if ($loai === 'room') {
-    $stmt = $pdo->prepare("SELECT id FROM rooms WHERE id = :id AND trang_thai = 'available'");
-    $stmt->execute(['id' => $roomId]);
-    if (!$stmt->fetch()) {
-        bookings_store_back_with_errors(['Phòng đã chọn không tồn tại hoặc không còn khả dụng.'], $old);
-    }
-} else {
-    $stmt = $pdo->prepare("SELECT id FROM equipment WHERE id = :id AND co_the_muon = 1 AND trang_thai = 'active'");
-    $stmt->execute(['id' => $equipmentId]);
-    if (!$stmt->fetch()) {
-        bookings_store_back_with_errors(['Thiết bị đã chọn không tồn tại hoặc không còn khả dụng.'], $old);
-    }
+
+/*
+ * Kiểm tra thứ tự thời gian
+ */
+if (
+    $startDate
+    && $endDate
+    && $endDate <= $startDate
+) {
+    $errors[] =
+        'Thời gian kết thúc phải sau thời gian bắt đầu.';
 }
 
-// Kiểm tra trùng lịch (chỉ tính các yêu cầu đang chờ hoặc đã duyệt)
-if (booking_has_conflict($pdo, $loai, $roomId, $equipmentId, $start, $end)) {
-    bookings_store_back_with_errors(['Khung giờ này đã có yêu cầu khác (đang chờ hoặc đã duyệt) trùng lịch.'], $old);
+
+/*
+ * Không cho đặt thời gian trong quá khứ
+ */
+if (
+    $startDate
+    && $startDate->format('Y-m-d H:i:00')
+        < date('Y-m-d H:i:00')
+) {
+    $errors[] =
+        'Thời gian bắt đầu không được ở trong quá khứ.';
 }
+
+
+/*
+ * Chuyển sang format MySQL
+ */
+$startSql = $startDate
+    ? $startDate->format('Y-m-d H:i:s')
+    : '';
+
+$endSql = $endDate
+    ? $endDate->format('Y-m-d H:i:s')
+    : '';
+
+
+/*
+ * Kiểm tra trùng lịch.
+ *
+ * Khi sửa:
+ * - truyền $id để repository bỏ qua chính booking đang sửa.
+ *
+ * Khi tạo:
+ * - $id = 0 nên không loại trừ booking nào.
+ */
+if (
+    empty($errors)
+    && bookingHasTimeConflict(
+        $pdo,
+        $type,
+        $resourceId,
+        $startSql,
+        $endSql,
+        $id > 0 ? $id : null
+    )
+) {
+    $errors[] =
+        'Phòng hoặc thiết bị đã có yêu cầu trùng thời gian.';
+}
+
+
+/*
+ * Nếu có lỗi -> quay lại form và giữ dữ liệu người dùng nhập
+ */
+if (!empty($errors)) {
+
+    $_SESSION['booking_form_errors'] = $errors;
+
+    $_SESSION['booking_form_data'] = [
+        'type' => $type,
+        'loai_yeu_cau' => $type,
+
+        'room_id' => $roomId,
+        'equipment_id' => $equipmentId,
+
+        'start_time' => $startInput,
+        'end_time' => $endInput,
+
+        'thoi_gian_bat_dau' => $startInput,
+        'thoi_gian_ket_thuc' => $endInput,
+
+        'purpose' => $purpose,
+        'muc_dich' => $purpose,
+    ];
+
+    header('Location: ' . $formUrl);
+    exit;
+}
+
+
+/*
+ * Dữ liệu chuẩn để repository xử lý
+ */
+$data = [
+    'type' => $type,
+
+    'room_id' => $type === 'room'
+        ? $roomId
+        : null,
+
+    'equipment_id' => $type === 'equipment'
+        ? $equipmentId
+        : null,
+
+    'start_time' => $startSql,
+    'end_time' => $endSql,
+
+    'purpose' => $purpose,
+];
+
 
 $user = current_user();
-$stmt = $pdo->prepare(
-    "INSERT INTO bookings (user_id, loai_yeu_cau, room_id, equipment_id, thoi_gian_bat_dau, thoi_gian_ket_thuc, muc_dich, trang_thai)
-     VALUES (:user_id, :loai, :room_id, :equipment_id, :start, :end, :muc_dich, 'pending')"
-);
-$stmt->execute([
-    'user_id' => $user['id'],
-    'loai' => $loai,
-    'room_id' => $roomId,
-    'equipment_id' => $equipmentId,
-    'start' => $start,
-    'end' => $end,
-    'muc_dich' => $mucDich,
-]);
 
-flash_set('success', 'Đã gửi yêu cầu thành công, vui lòng chờ duyệt.');
+
+/*
+ * Nếu có ID -> cập nhật booking
+ */
+if ($id > 0) {
+
+    $updated = updateBooking(
+        $pdo,
+        $id,
+        (int) $user['id'],
+        $data
+    );
+
+    if ($updated) {
+
+        flash_set(
+            'success',
+            'Cập nhật yêu cầu thành công.'
+        );
+
+    } else {
+
+        flash_set(
+            'error',
+            'Yêu cầu không còn được phép sửa.'
+        );
+    }
+
+
+/*
+ * Không có ID -> tạo booking mới
+ */
+} else {
+
+    createBooking(
+        $pdo,
+        (int) $user['id'],
+        $data
+    );
+
+    flash_set(
+        'success',
+        'Tạo yêu cầu thành công và đang chờ duyệt.'
+    );
+}
+
+
+/*
+ * Quay về danh sách yêu cầu
+ */
 header('Location: /bookings/my_requests.php');
 exit;

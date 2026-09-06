@@ -1,180 +1,494 @@
 <?php
+
 declare(strict_types=1);
-require_once __DIR__ . '/../includes/app_foot.php';
+
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth_check.php';
-require_once __DIR__ . '/../includes/flash.php';
 require_once __DIR__ . '/../includes/csrf.php';
- 
+require_once __DIR__ . '/../includes/flash.php';
+require_once __DIR__ . '/repository.php';
+
 require_login();
- 
-$rooms = $pdo->query(
-    "SELECT id, ma_phong, ten_phong, vi_tri, suc_chua
-     FROM rooms
-     WHERE trang_thai = 'available'
-     ORDER BY ten_phong"
-)->fetchAll();
- 
-$equipmentList = $pdo->query(
-    "SELECT id, ma_thiet_bi, ten_thiet_bi
-     FROM equipment
-     WHERE co_the_muon = 1 AND trang_thai = 'active'
-     ORDER BY ten_thiet_bi"
-)->fetchAll();
- 
-// Dữ liệu cũ + lỗi nếu vừa quay lại từ store.php do validate thất bại
-$old = $_SESSION['booking_old'] ?? [];
-unset($_SESSION['booking_old']);
-$errors = $_SESSION['booking_errors'] ?? [];
-unset($_SESSION['booking_errors']);
- 
-$loaiMacDinh = $old['loai_yeu_cau'] ?? ($_GET['loai'] ?? 'room');
-if (!in_array($loaiMacDinh, ['room', 'equipment'], true)) {
-    $loaiMacDinh = 'room';
+
+$user = current_user();
+$id = max(0, (int) ($_GET['id'] ?? 0));
+$booking = null;
+
+/*
+ * Nếu có id -> đang chỉnh sửa yêu cầu.
+ * Chỉ chủ yêu cầu và yêu cầu đang pending mới được sửa.
+ */
+if ($id > 0) {
+    $booking = findBookingById($pdo, $id);
+
+    if (
+        !$booking ||
+        (int) $booking['user_id'] !== (int) $user['id'] ||
+        $booking['trang_thai'] !== 'pending'
+    ) {
+        flash_set(
+            'error',
+            'Yêu cầu không tồn tại hoặc không còn được phép sửa.'
+        );
+
+        header('Location: /bookings/my_requests.php');
+        exit;
+    }
 }
- 
-$page_title = 'Đăng ký phòng / Mượn thiết bị';
+
+/*
+ * Lấy dữ liệu cũ khi quay lại form sau khi validate thất bại.
+ * Hỗ trợ cả cơ chế cũ của main và cơ chế của nguyenky-booking.
+ */
+$errors = $_SESSION['booking_form_errors']
+    ?? $_SESSION['booking_errors']
+    ?? [];
+
+$formData = $_SESSION['booking_form_data']
+    ?? $_SESSION['booking_old']
+    ?? [];
+
+unset(
+    $_SESSION['booking_form_errors'],
+    $_SESSION['booking_form_data'],
+    $_SESSION['booking_old'],
+    $_SESSION['booking_errors']
+);
+
+/*
+ * Dữ liệu form.
+ * Nếu đang sửa thì ưu tiên dữ liệu từ booking.
+ * Nếu vừa submit lỗi thì ưu tiên dữ liệu đã nhập.
+ */
+$type = (string) (
+    $formData['type']
+    ?? $formData['loai_yeu_cau']
+    ?? ($booking['loai_yeu_cau'] ?? ($_GET['loai'] ?? 'room'))
+);
+
+if (!in_array($type, ['room', 'equipment'], true)) {
+    $type = 'room';
+}
+
+$roomId = (int) (
+    $formData['room_id']
+    ?? ($booking['room_id'] ?? 0)
+);
+
+$equipmentId = (int) (
+    $formData['equipment_id']
+    ?? ($booking['equipment_id'] ?? 0)
+);
+
+$startTime = (string) (
+    $formData['start_time']
+    ?? $formData['thoi_gian_bat_dau']
+    ?? ($booking['thoi_gian_bat_dau'] ?? '')
+);
+
+$endTime = (string) (
+    $formData['end_time']
+    ?? $formData['thoi_gian_ket_thuc']
+    ?? ($booking['thoi_gian_ket_thuc'] ?? '')
+);
+
+$purpose = (string) (
+    $formData['purpose']
+    ?? $formData['muc_dich']
+    ?? ($booking['muc_dich'] ?? '')
+);
+
+/*
+ * datetime-local cần định dạng YYYY-MM-DDTHH:MM.
+ */
+if ($startTime !== '' && !str_contains($startTime, 'T')) {
+    $timestamp = strtotime($startTime);
+    if ($timestamp !== false) {
+        $startTime = date('Y-m-d\TH:i', $timestamp);
+    }
+}
+
+if ($endTime !== '' && !str_contains($endTime, 'T')) {
+    $timestamp = strtotime($endTime);
+    if ($timestamp !== false) {
+        $endTime = date('Y-m-d\TH:i', $timestamp);
+    }
+}
+
+/*
+ * Lấy danh sách tài nguyên khả dụng.
+ */
+$rooms = findAvailableRooms($pdo);
+$equipment = findBorrowableEquipment($pdo);
+
+$flashError = flash_get('error');
+
+$page_title = $id > 0 ? 'Sửa yêu cầu' : 'Đăng ký phòng / Mượn thiết bị';
 $active_menu = 'booking';
+
 require_once __DIR__ . '/../includes/app_head.php';
 ?>
- 
-<?php if ($errors): ?>
-    <div class="alert alert-error">
+
+<div class="page-heading">
+    <div>
+        <p class="breadcrumb">
+            <a href="/bookings/my_requests.php">Yêu cầu của tôi</a>
+            /
+            <?php echo $id > 0 ? 'Chỉnh sửa' : 'Tạo mới'; ?>
+        </p>
+
+        <h2>
+            <?php echo $id > 0 ? 'Chỉnh sửa yêu cầu' : 'Tạo yêu cầu sử dụng'; ?>
+        </h2>
+
+        <p>
+            Chọn phòng hoặc thiết bị, nhập thời gian và mục đích sử dụng.
+        </p>
+    </div>
+</div>
+
+<?php if (!empty($errors)): ?>
+    <div class="alert alert-error" role="alert">
         <ul>
-            <?php foreach ($errors as $err): ?>
-                <li><?php echo htmlspecialchars($err); ?></li>
+            <?php foreach ($errors as $error): ?>
+                <li>
+                    <?php echo htmlspecialchars((string) $error); ?>
+                </li>
             <?php endforeach; ?>
         </ul>
     </div>
 <?php endif; ?>
- 
-<?php if ($msg = flash_get('success')): ?>
-    <div class="alert alert-success"><?php echo htmlspecialchars($msg); ?></div>
+
+<?php if ($flashError): ?>
+    <div class="alert alert-error">
+        <?php echo htmlspecialchars($flashError); ?>
+    </div>
 <?php endif; ?>
- 
-<div class="chart-card" style="max-width:640px;">
-    <h3>Thông tin yêu cầu</h3>
-    <p class="chart-sub">
-        Chọn loại yêu cầu, tài nguyên và khung giờ sử dụng. Yêu cầu sẽ ở trạng thái
-        <strong>chờ duyệt</strong> cho tới khi cán bộ phòng lab xác nhận.
-    </p>
- 
+
+<?php if ($msg = flash_get('success')): ?>
+    <div class="alert alert-success">
+        <?php echo htmlspecialchars($msg); ?>
+    </div>
+<?php endif; ?>
+
+<section class="content-card form-card">
+
+    <div class="chart-card">
+        <h3>Thông tin yêu cầu</h3>
+
+        <p class="chart-sub">
+            Chọn loại yêu cầu, tài nguyên và khung giờ sử dụng.
+            Yêu cầu sẽ ở trạng thái
+            <strong>chờ duyệt</strong>
+            cho tới khi cán bộ phòng lab xác nhận.
+        </p>
+    </div>
+
     <form method="post" action="/bookings/store.php" id="bookingForm">
+
         <?php echo csrf_field(); ?>
- 
+
+        <?php if ($id > 0): ?>
+            <input
+                type="hidden"
+                name="id"
+                value="<?php echo $id; ?>"
+            >
+        <?php endif; ?>
+
         <div class="form-group">
-            <label>Loại yêu cầu <span class="required">*</span></label>
-            <select name="loai_yeu_cau" id="loaiYeuCau">
-                <option value="room" <?php echo $loaiMacDinh === 'room' ? 'selected' : ''; ?>>Đặt phòng thực hành</option>
-                <option value="equipment" <?php echo $loaiMacDinh === 'equipment' ? 'selected' : ''; ?>>Mượn thiết bị</option>
+
+            <label for="loai_yeu_cau">
+                Loại yêu cầu
+                <span class="required">*</span>
+            </label>
+
+            <select
+                id="loai_yeu_cau"
+                name="loai_yeu_cau"
+                required
+            >
+                <option
+                    value="room"
+                    <?php echo $type === 'room' ? 'selected' : ''; ?>
+                >
+                    Đặt phòng thực hành
+                </option>
+
+                <option
+                    value="equipment"
+                    <?php echo $type === 'equipment' ? 'selected' : ''; ?>
+                >
+                    Mượn thiết bị
+                </option>
             </select>
+
         </div>
- 
-        <div class="form-group" id="roomGroup">
-            <label>Phòng thực hành <span class="required">*</span></label>
-            <select name="room_id" id="roomSelect">
-                <option value="">-- Chọn phòng --</option>
-                <?php foreach ($rooms as $r): ?>
-                    <option value="<?php echo $r['id']; ?>" <?php echo (($old['room_id'] ?? '') == $r['id']) ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($r['ma_phong'] . ' - ' . $r['ten_phong'] . ' (' . $r['vi_tri'] . ', sức chứa ' . $r['suc_chua'] . ')'); ?>
+
+        <div
+            class="form-group"
+            id="roomGroup"
+        >
+
+            <label for="room_id">
+                Phòng thực hành
+                <span class="required">*</span>
+            </label>
+
+            <select
+                id="room_id"
+                name="room_id"
+            >
+
+                <option value="">
+                    -- Chọn phòng --
+                </option>
+
+                <?php foreach ($rooms as $room): ?>
+
+                    <option
+                        value="<?php echo (int) $room['id']; ?>"
+                        <?php echo $roomId === (int) $room['id'] ? 'selected' : ''; ?>
+                    >
+                        <?php
+                        echo htmlspecialchars(
+                            $room['ma_phong']
+                            . ' - '
+                            . $room['ten_phong']
+                            . ' ('
+                            . $room['vi_tri']
+                            . ', sức chứa '
+                            . ($room['suc_chua'] ?? '')
+                            . ')'
+                        );
+                        ?>
                     </option>
+
                 <?php endforeach; ?>
+
             </select>
+
         </div>
- 
-        <div class="form-group" id="equipmentGroup" style="display:none;">
-            <label>Thiết bị <span class="required">*</span></label>
-            <select name="equipment_id" id="equipmentSelect">
-                <option value="">-- Chọn thiết bị --</option>
-                <?php foreach ($equipmentList as $e): ?>
-                    <option value="<?php echo $e['id']; ?>" <?php echo (($old['equipment_id'] ?? '') == $e['id']) ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($e['ma_thiet_bi'] . ' - ' . $e['ten_thiet_bi']); ?>
+
+        <div
+            class="form-group"
+            id="equipmentGroup"
+        >
+
+            <label for="equipment_id">
+                Thiết bị
+                <span class="required">*</span>
+            </label>
+
+            <select
+                id="equipment_id"
+                name="equipment_id"
+            >
+
+                <option value="">
+                    -- Chọn thiết bị --
+                </option>
+
+                <?php foreach ($equipment as $item): ?>
+
+                    <option
+                        value="<?php echo (int) $item['id']; ?>"
+                        <?php echo $equipmentId === (int) $item['id'] ? 'selected' : ''; ?>
+                    >
+                        <?php
+                        echo htmlspecialchars(
+                            $item['ma_thiet_bi']
+                            . ' - '
+                            . $item['ten_thiet_bi']
+                        );
+                        ?>
                     </option>
+
                 <?php endforeach; ?>
+
             </select>
+
         </div>
- 
+
+        <div class="form-grid-two">
+
+            <div class="form-group">
+
+                <label for="thoi_gian_bat_dau">
+                    Thời gian bắt đầu
+                    <span class="required">*</span>
+                </label>
+
+                <input
+                    type="datetime-local"
+                    id="thoi_gian_bat_dau"
+                    name="thoi_gian_bat_dau"
+                    value="<?php echo htmlspecialchars($startTime); ?>"
+                    required
+                >
+
+            </div>
+
+            <div class="form-group">
+
+                <label for="thoi_gian_ket_thuc">
+                    Thời gian kết thúc
+                    <span class="required">*</span>
+                </label>
+
+                <input
+                    type="datetime-local"
+                    id="thoi_gian_ket_thuc"
+                    name="thoi_gian_ket_thuc"
+                    value="<?php echo htmlspecialchars($endTime); ?>"
+                    required
+                >
+
+            </div>
+
+        </div>
+
         <div class="form-group">
-            <label>Thời gian bắt đầu <span class="required">*</span></label>
-            <input type="datetime-local" name="thoi_gian_bat_dau" id="tgBatDau"
-                   value="<?php echo htmlspecialchars($old['thoi_gian_bat_dau'] ?? ''); ?>">
+
+            <label for="muc_dich">
+                Mục đích sử dụng
+                <span class="required">*</span>
+            </label>
+
+            <textarea
+                id="muc_dich"
+                name="muc_dich"
+                rows="4"
+                maxlength="255"
+                required
+            ><?php echo htmlspecialchars($purpose); ?></textarea>
+
+            <p class="field-hint">
+                Nhập từ 5 đến 255 ký tự.
+            </p>
+
         </div>
- 
-        <div class="form-group">
-            <label>Thời gian kết thúc <span class="required">*</span></label>
-            <input type="datetime-local" name="thoi_gian_ket_thuc" id="tgKetThuc"
-                   value="<?php echo htmlspecialchars($old['thoi_gian_ket_thuc'] ?? ''); ?>">
+
+        <p
+            class="field-hint"
+            id="availabilityResult"
+        ></p>
+
+        <div class="form-actions">
+
+            <button
+                type="submit"
+                class="btn btn-primary"
+            >
+                <?php echo $id > 0 ? 'Cập nhật' : 'Gửi yêu cầu'; ?>
+            </button>
+
+            <a
+                href="/bookings/my_requests.php"
+                class="btn btn-secondary"
+            >
+                Quay lại
+            </a>
+
         </div>
- 
-        <div class="form-group">
-            <label>Mục đích sử dụng <span class="required">*</span></label>
-            <textarea name="muc_dich" rows="3" maxlength="255"><?php echo htmlspecialchars($old['muc_dich'] ?? ''); ?></textarea>
-        </div>
- 
-        <p class="field-hint" id="availabilityResult"></p>
- 
-        <button type="submit" class="btn btn-primary">Gửi yêu cầu</button>
-        <a href="/bookings/my_requests.php" class="btn btn-secondary">Xem yêu cầu của tôi</a>
+
     </form>
-</div>
- 
+
+</section>
+
 <script>
 (function () {
-    var loaiSelect = document.getElementById('loaiYeuCau');
-    var roomGroup = document.getElementById('roomGroup');
-    var equipmentGroup = document.getElementById('equipmentGroup');
-    var roomSelect = document.getElementById('roomSelect');
-    var equipmentSelect = document.getElementById('equipmentSelect');
-    var startInput = document.getElementById('tgBatDau');
-    var endInput = document.getElementById('tgKetThuc');
-    var resultBox = document.getElementById('availabilityResult');
- 
+    const typeSelect = document.getElementById('loai_yeu_cau');
+    const roomGroup = document.getElementById('roomGroup');
+    const equipmentGroup = document.getElementById('equipmentGroup');
+
+    const roomSelect = document.getElementById('room_id');
+    const equipmentSelect = document.getElementById('equipment_id');
+
+    const startInput = document.getElementById('thoi_gian_bat_dau');
+    const endInput = document.getElementById('thoi_gian_ket_thuc');
+
+    const resultBox = document.getElementById('availabilityResult');
+
     function toggleGroups() {
-        var isRoom = loaiSelect.value === 'room';
-        roomGroup.style.display = isRoom ? '' : 'none';
-        equipmentGroup.style.display = isRoom ? 'none' : '';
+
+        const isRoom = typeSelect.value === 'room';
+
+        roomGroup.hidden = !isRoom;
+        equipmentGroup.hidden = isRoom;
+
+        roomSelect.required = isRoom;
+        equipmentSelect.required = !isRoom;
+
+        if (!isRoom) {
+            roomSelect.value = '';
+        }
+
+        if (isRoom) {
+            equipmentSelect.value = '';
+        }
+
         resultBox.textContent = '';
     }
- 
+
     function checkAvailability() {
-        var isRoom = loaiSelect.value === 'room';
-        var resourceId = isRoom ? roomSelect.value : equipmentSelect.value;
-        var start = startInput.value;
-        var end = endInput.value;
- 
+
+        const isRoom = typeSelect.value === 'room';
+
+        const resourceId = isRoom
+            ? roomSelect.value
+            : equipmentSelect.value;
+
+        const start = startInput.value;
+        const end = endInput.value;
+
         if (!resourceId || !start || !end) {
             resultBox.textContent = '';
             return;
         }
- 
-        var params = new URLSearchParams({
-            loai_yeu_cau: loaiSelect.value,
+
+        const params = new URLSearchParams({
+            loai_yeu_cau: typeSelect.value,
             id: resourceId,
             start: start,
             end: end
         });
- 
+
         fetch('/api/check_availability.php?' + params.toString())
-            .then(function (res) { return res.json(); })
+            .then(function (res) {
+                return res.json();
+            })
             .then(function (data) {
+
                 resultBox.textContent = data.message || '';
-                resultBox.style.color = data.available ? 'var(--color-success)' : 'var(--color-error)';
+
+                resultBox.style.color = data.available
+                    ? 'var(--color-success)'
+                    : 'var(--color-error)';
             })
             .catch(function () {
                 resultBox.textContent = '';
             });
     }
- 
-    loaiSelect.addEventListener('change', function () {
+
+    typeSelect.addEventListener('change', function () {
         toggleGroups();
         checkAvailability();
     });
-    [roomSelect, equipmentSelect, startInput, endInput].forEach(function (el) {
+
+    [
+        roomSelect,
+        equipmentSelect,
+        startInput,
+        endInput
+    ].forEach(function (el) {
         el.addEventListener('change', checkAvailability);
     });
- 
+
     toggleGroups();
+    checkAvailability();
+
 })();
 </script>
- 
+
 <?php require_once __DIR__ . '/../includes/app_foot.php'; ?>

@@ -2,9 +2,16 @@
 /**
  * bookings/my_requests.php
  * ---------------------------------------------------------------------
- * Danh sách các yêu cầu (đặt phòng / mượn thiết bị) đang chờ duyệt hoặc
- * đã được duyệt của chính người dùng đang đăng nhập. Cho phép huỷ yêu
- * cầu khi còn ở trạng thái 'pending'.
+ * Danh sách các yêu cầu của người dùng đang đăng nhập.
+ *
+ * Hỗ trợ:
+ * - Tìm kiếm theo mục đích, phòng, thiết bị
+ * - Lọc loại yêu cầu
+ * - Lọc trạng thái
+ * - Phân trang
+ * - Xem chi tiết
+ * - Sửa yêu cầu khi còn pending
+ * - Hủy yêu cầu khi còn pending
  * ---------------------------------------------------------------------
  */
 
@@ -12,90 +19,392 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth_check.php';
-require_once __DIR__ . '/../includes/flash.php';
 require_once __DIR__ . '/../includes/csrf.php';
-require_once __DIR__ . '/../includes/booking_helpers.php';
+require_once __DIR__ . '/../includes/flash.php';
+require_once __DIR__ . '/repository.php';
 
 require_login();
+
 $user = current_user();
 
-$stmt = $pdo->prepare(
-    "SELECT b.*, r.ma_phong, r.ten_phong, e.ma_thiet_bi, e.ten_thiet_bi
-     FROM bookings b
-     LEFT JOIN rooms r ON r.id = b.room_id
-     LEFT JOIN equipment e ON e.id = b.equipment_id
-     WHERE b.user_id = :uid AND b.trang_thai IN ('pending','approved')
-     ORDER BY b.thoi_gian_bat_dau ASC"
+$keyword = trim((string) ($_GET['q'] ?? ''));
+$status = (string) ($_GET['status'] ?? '');
+$type = (string) ($_GET['type'] ?? '');
+
+if (!in_array($status, ['', 'pending', 'approved', 'rejected', 'cancelled'], true)) {
+    $status = '';
+}
+
+if (!in_array($type, ['', 'room', 'equipment'], true)) {
+    $type = '';
+}
+
+$page = max(1, (int) ($_GET['page'] ?? 1));
+$perPage = 3;
+
+$filters = [
+    'owner_id' => (int) $user['id'],
+    'keyword' => $keyword,
+    'status' => $status,
+    'type' => $type,
+];
+
+$total = countBookings($pdo, $filters);
+
+$totalPages = max(1, (int) ceil($total / $perPage));
+
+$page = min($page, $totalPages);
+
+$bookings = findBookings(
+    $pdo,
+    $filters,
+    $page,
+    $perPage
 );
-$stmt->execute(['uid' => $user['id']]);
-$bookings = $stmt->fetchAll();
+
+$success = flash_get('success');
+$error = flash_get('error');
 
 $page_title = 'Yêu cầu của tôi';
-$active_menu = 'booking';
+$active_menu = 'my_requests';
+
 require_once __DIR__ . '/../includes/app_head.php';
 ?>
 
-<?php if ($msg = flash_get('success')): ?>
-    <div class="alert alert-success"><?php echo htmlspecialchars($msg); ?></div>
-<?php endif; ?>
-<?php if ($msg = flash_get('error')): ?>
-    <div class="alert alert-error"><?php echo htmlspecialchars($msg); ?></div>
+<div class="page-heading">
+    <div>
+        <h2>Yêu cầu của tôi</h2>
+        <p>
+            Theo dõi, xem chi tiết, chỉnh sửa hoặc hủy yêu cầu.
+        </p>
+    </div>
+
+    <a href="/bookings/form.php" class="btn btn-primary">
+        Tạo yêu cầu
+    </a>
+</div>
+
+<?php if ($success): ?>
+    <div class="alert alert-success">
+        <?php echo htmlspecialchars($success); ?>
+    </div>
 <?php endif; ?>
 
-<p style="margin:0 0 16px;">
-    <a href="/bookings/form.php" class="btn btn-primary">+ Tạo yêu cầu mới</a>
-</p>
-
-<?php if (empty($bookings)): ?>
-    <div class="empty-state">Bạn chưa có yêu cầu nào đang chờ duyệt hoặc đã được duyệt.</div>
-<?php else: ?>
-    <table class="data-table">
-        <thead>
-        <tr>
-            <th>Loại</th>
-            <th>Tài nguyên</th>
-            <th>Thời gian</th>
-            <th>Mục đích</th>
-            <th>Trạng thái</th>
-            <th>Hành động</th>
-        </tr>
-        </thead>
-        <tbody>
-        <?php foreach ($bookings as $b): ?>
-            <tr>
-                <td><?php echo $b['loai_yeu_cau'] === 'room' ? 'Đặt phòng' : 'Mượn thiết bị'; ?></td>
-                <td>
-                    <?php
-                    echo $b['loai_yeu_cau'] === 'room'
-                        ? htmlspecialchars($b['ma_phong'] . ' - ' . $b['ten_phong'])
-                        : htmlspecialchars($b['ma_thiet_bi'] . ' - ' . $b['ten_thiet_bi']);
-                    ?>
-                </td>
-                <td>
-                    <?php
-                    echo date('d/m/Y H:i', strtotime($b['thoi_gian_bat_dau']))
-                        . ' - ' . date('d/m/Y H:i', strtotime($b['thoi_gian_ket_thuc']));
-                    ?>
-                </td>
-                <td><?php echo htmlspecialchars($b['muc_dich']); ?></td>
-                <td>
-                    <span style="<?php echo booking_status_style($b['trang_thai']); ?>padding:3px 10px;border-radius:999px;font-size:.78rem;font-weight:600;">
-                        <?php echo booking_status_label($b['trang_thai']); ?>
-                    </span>
-                </td>
-                <td>
-                    <?php if ($b['trang_thai'] === 'pending'): ?>
-                        <a href="/bookings/cancel.php?id=<?php echo $b['id']; ?>&csrf_token=<?php echo urlencode(csrf_token()); ?>"
-                           class="btn btn-danger"
-                           onclick="return confirm('Bạn có chắc muốn huỷ yêu cầu này?');">Huỷ</a>
-                    <?php else: ?>
-                        &mdash;
-                    <?php endif; ?>
-                </td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
+<?php if ($error): ?>
+    <div class="alert alert-error">
+        <?php echo htmlspecialchars($error); ?>
+    </div>
 <?php endif; ?>
+
+
+<section class="content-card">
+
+    <form method="get" class="booking-filter">
+
+        <div class="form-group">
+            <label for="q">Tìm kiếm</label>
+
+            <input
+                type="text"
+                id="q"
+                name="q"
+                value="<?php echo htmlspecialchars($keyword); ?>"
+                placeholder="Mục đích, phòng hoặc thiết bị"
+            >
+        </div>
+
+
+        <div class="form-group">
+            <label for="type">Loại yêu cầu</label>
+
+            <select id="type" name="type">
+                <option value="">Tất cả</option>
+
+                <option
+                    value="room"
+                    <?php echo $type === 'room' ? 'selected' : ''; ?>
+                >
+                    Đặt phòng
+                </option>
+
+                <option
+                    value="equipment"
+                    <?php echo $type === 'equipment' ? 'selected' : ''; ?>
+                >
+                    Mượn thiết bị
+                </option>
+            </select>
+        </div>
+
+
+        <div class="form-group">
+            <label for="status">Trạng thái</label>
+
+            <select id="status" name="status">
+                <option value="">Tất cả</option>
+
+                <option
+                    value="pending"
+                    <?php echo $status === 'pending' ? 'selected' : ''; ?>
+                >
+                    Chờ duyệt
+                </option>
+
+                <option
+                    value="approved"
+                    <?php echo $status === 'approved' ? 'selected' : ''; ?>
+                >
+                    Đã duyệt
+                </option>
+
+                <option
+                    value="rejected"
+                    <?php echo $status === 'rejected' ? 'selected' : ''; ?>
+                >
+                    Từ chối
+                </option>
+
+                <option
+                    value="cancelled"
+                    <?php echo $status === 'cancelled' ? 'selected' : ''; ?>
+                >
+                    Đã hủy
+                </option>
+            </select>
+        </div>
+
+
+        <div class="filter-actions">
+            <button type="submit" class="btn btn-primary">
+                Lọc
+            </button>
+
+            <a
+                href="/bookings/my_requests.php"
+                class="btn btn-secondary"
+            >
+                Đặt lại
+            </a>
+        </div>
+
+    </form>
+
+</section>
+
+
+<section class="content-card table-card">
+
+    <div class="table-summary">
+        Tìm thấy
+        <strong><?php echo $total; ?></strong>
+        yêu cầu
+    </div>
+
+
+    <?php if (empty($bookings)): ?>
+
+        <div class="empty-state">
+            Chưa có yêu cầu phù hợp.
+        </div>
+
+    <?php else: ?>
+
+        <div class="table-wrap">
+
+            <table class="data-table">
+
+                <thead>
+                    <tr>
+                        <th>Mã</th>
+                        <th>Loại</th>
+                        <th>Tài nguyên</th>
+                        <th>Thời gian</th>
+                        <th>Mục đích</th>
+                        <th>Trạng thái</th>
+                        <th>Thao tác</th>
+                    </tr>
+                </thead>
+
+
+                <tbody>
+
+                <?php foreach ($bookings as $item): ?>
+
+                    <tr>
+
+                        <td>
+                            #<?php echo (int) $item['id']; ?>
+                        </td>
+
+
+                        <td>
+                            <?php
+                            echo htmlspecialchars(
+                                bookingTypeLabel($item['loai_yeu_cau'])
+                            );
+                            ?>
+                        </td>
+
+
+                        <td>
+                            <?php
+                            echo htmlspecialchars(
+                                (string) $item['tai_nguyen']
+                            );
+                            ?>
+                        </td>
+
+
+                        <td>
+
+                            <?php
+                            echo date(
+                                'd/m/Y H:i',
+                                strtotime($item['thoi_gian_bat_dau'])
+                            );
+                            ?>
+
+                            <br>
+
+                            <span class="text-muted">
+                                đến
+                                <?php
+                                echo date(
+                                    'd/m/Y H:i',
+                                    strtotime($item['thoi_gian_ket_thuc'])
+                                );
+                                ?>
+                            </span>
+
+                        </td>
+
+
+                        <td>
+                            <?php
+                            echo htmlspecialchars(
+                                (string) ($item['muc_dich'] ?? '')
+                            );
+                            ?>
+                        </td>
+
+
+                        <td>
+
+                            <span
+                                class="status-pill <?php
+                                    echo htmlspecialchars(
+                                        $item['trang_thai']
+                                    );
+                                ?>"
+                            >
+                                <?php
+                                echo htmlspecialchars(
+                                    bookingStatusLabel(
+                                        $item['trang_thai']
+                                    )
+                                );
+                                ?>
+                            </span>
+
+                        </td>
+
+
+                        <td>
+
+                            <div class="row-actions">
+
+                                <a
+                                    href="/bookings/detail.php?id=<?php echo (int) $item['id']; ?>"
+                                    class="btn btn-secondary btn-small"
+                                >
+                                    Chi tiết
+                                </a>
+
+
+                                <?php if ($item['trang_thai'] === 'pending'): ?>
+
+                                    <a
+                                        href="/bookings/form.php?id=<?php echo (int) $item['id']; ?>"
+                                        class="btn btn-secondary btn-small"
+                                    >
+                                        Sửa
+                                    </a>
+
+
+                                    <form
+                                        method="post"
+                                        action="/bookings/cancel.php"
+                                        onsubmit="return confirm('Bạn có chắc muốn hủy yêu cầu này?');"
+                                    >
+
+                                        <?php echo csrf_field(); ?>
+
+                                        <input
+                                            type="hidden"
+                                            name="id"
+                                            value="<?php echo (int) $item['id']; ?>"
+                                        >
+
+                                        <button
+                                            type="submit"
+                                            class="btn btn-danger btn-small"
+                                        >
+                                            Hủy
+                                        </button>
+
+                                    </form>
+
+                                <?php endif; ?>
+
+                            </div>
+
+                        </td>
+
+                    </tr>
+
+                <?php endforeach; ?>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    <?php endif; ?>
+
+
+    <?php if ($totalPages > 1): ?>
+
+        <nav
+            class="pagination"
+            aria-label="Phân trang"
+        >
+
+            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+
+                <?php
+                $query = http_build_query([
+                    'q' => $keyword,
+                    'type' => $type,
+                    'status' => $status,
+                    'page' => $i,
+                ]);
+                ?>
+
+                <a
+                    href="?<?php echo htmlspecialchars($query); ?>"
+                    class="<?php echo $i === $page ? 'active' : ''; ?>"
+                >
+                    <?php echo $i; ?>
+                </a>
+
+            <?php endfor; ?>
+
+        </nav>
+
+    <?php endif; ?>
+
+</section>
+
 
 <?php require_once __DIR__ . '/../includes/app_foot.php'; ?>
