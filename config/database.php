@@ -21,10 +21,9 @@ require_once __DIR__ . '/session.php';
 // ---- Thông tin kết nối ----
 $dbHost = getenv('DB_HOST') ?: '127.0.0.1';
 $dbPort = getenv('DB_PORT') ?: '3306';
-
-$dbName = getenv('DB_NAME') ?: 'quanlyphongthuchanh';
+$dbName = getenv('DB_NAME') ?: 'quanly_phongthuchanh';
 $dbUser = getenv('DB_USER') ?: 'root';
-$dbPass = getenv('DB_PASS') ?: '';
+$dbPass = getenv('DB_PASS') ?: '123456';
 $dbCharset = 'utf8mb4';
 
 $dsn = sprintf(

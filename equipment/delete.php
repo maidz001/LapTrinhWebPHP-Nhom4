@@ -1,21 +1,46 @@
 <?php
+/**
+ * equipment/delete.php
+ * ---------------------------------------------------------------------
+ * Xoá thiết bị (GET có kèm csrf_token, theo mẫu auth/logout.php).
+ * Nếu thiết bị đang có lịch sử mượn (bookings.equipment_id RESTRICT),
+ * DB sẽ từ chối xoá — bắt lỗi và báo cho người dùng.
+ * ---------------------------------------------------------------------
+ */
+
+declare(strict_types=1);
+
 require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../models/ThietBi.php';
+require_once __DIR__ . '/../includes/auth_check.php';
+require_once __DIR__ . '/../includes/flash.php';
+require_once __DIR__ . '/../includes/csrf.php';
 
-$tbModel = new ThietBi($pdo);
-$id = (int)($_GET['id'] ?? 0);
+require_role(['admin', 'lab_staff']);
 
-$tb = $tbModel->getById($id);
-if (!$tb) {
-    header('Location: index.php?msg=' . urlencode('Không tìm thấy thiết bị'));
+if (!csrf_verify($_GET['csrf_token'] ?? null)) {
+    flash_set('error', 'Phiên làm việc đã hết hạn, vui lòng thử lại.');
+    header('Location: /equipment/list.php');
+    exit;
+}
+
+$id = $_GET['id'] ?? '';
+if (!ctype_digit((string) $id)) {
+    flash_set('error', 'Thiết bị không hợp lệ.');
+    header('Location: /equipment/list.php');
     exit;
 }
 
 try {
-    $tbModel->delete($id);
-    header('Location: index.php?msg=' . urlencode('Đã xóa thiết bị "' . $tb['ten_thiet_bi'] . '"'));
-    exit;
+    $stmt = $pdo->prepare("DELETE FROM equipment WHERE id = :id");
+    $stmt->execute(['id' => (int) $id]);
+    if ($stmt->rowCount() > 0) {
+        flash_set('success', 'Đã xoá thiết bị. Các báo hỏng liên quan cũng đã được xoá theo.');
+    } else {
+        flash_set('error', 'Không tìm thấy thiết bị cần xoá.');
+    }
 } catch (PDOException $e) {
-    header('Location: index.php?msg=' . urlencode('Không thể xóa: thiết bị đang được tham chiếu ở nơi khác'));
-    exit;
+    flash_set('error', 'Không thể xoá thiết bị này vì đã có lịch sử mượn liên quan.');
 }
+
+header('Location: /equipment/list.php');
+exit;
