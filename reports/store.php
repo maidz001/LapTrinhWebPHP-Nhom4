@@ -74,6 +74,11 @@ $stmt->execute([
     'muc_do' => $old['muc_do'],
 ]);
 
+// Đánh dấu ngay thiết bị là "Hỏng" khi có báo cáo mới, để danh sách thiết bị
+// phản ánh đúng tình trạng thực tế thay vì chỉ nằm im trong bảng báo cáo.
+$stmt = $pdo->prepare("UPDATE equipment SET trang_thai = 'broken' WHERE id = :id");
+$stmt->execute(['id' => $equipmentId]);
+
 flash_set('success', 'Đã gửi báo cáo sự cố thành công.');
 header('Location: /reports/index.php');
 exit;
